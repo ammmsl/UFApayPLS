@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frisbee Payments and Attendance</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Frisbee Payment Tracker</h1>
+    </header>
+
+    <main>
+        <!-- Player Payments Section -->
+        <section id="payments">
+            <h2>Player Payments</h2>
+            <input type="text" id="searchBar" placeholder="Search by Name">
+            <button id="filterPending">Toggle Pending</button>
+            <button id="filterPrepay">Toggle Prepay Balance</button>
+            <div id="playerTable"></div>
+        </section>
+
+        <!-- Attendance Chart Section -->
+        <section id="attendance">
+            <h2>Attendance Chart</h2>
+            <canvas id="attendanceChart"></canvas>
+            <div id="popup" style="display: none;"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2025 Frisbee Game Tracker</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
