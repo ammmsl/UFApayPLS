@@ -1,90 +1,137 @@
-require('dotenv').config();
+// CSV URLs
+const SUMMARY_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRZfFNDYouOQCZjMKv6g0pVpePg7nvx5qMuaVuRjXxnhVd7qDR_Spb-L1BAiD3LQTKyil4xd_GGX81-/pub?gid=256158700&single=true&output=csv';
+const ATTENDANCE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRZfFNDYouOQCZjMKv6g0pVpePg7nvx5qMuaVuRjXxnhVd7qDR_Spb-L1BAiD3LQTKyil4xd_GGX81-/pub?gid=1655414989&single=true&output=csv';
 
-const apiKey = process.env.API_KEY;
-const summarySheetId = process.env.SUMMARY_SHEET_ID;
-const attendanceSheetId = process.env.ATTENDANCE_SHEET_ID;
+let summaryData = [];
+let attendanceData = [];
 
-
-document.addEventListener("DOMContentLoaded", () => {
-    loadSummaryTable();
-    loadAttendanceChart();
-});
-
-async function fetchSheetData(sheetId, range) {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    return data.values;
+// Parse CSV string to array
+function parseCSV(csv) {
+    const lines = csv.split('\n');
+    return lines.map(line => {
+        // Handle cases where fields might contain commas within quotes
+        const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+        return matches.map(field => field.replace(/^"|"$/g, '').trim());
+    });
 }
 
-async function loadSummaryTable() {
-    const data = await fetchSheetData(summarySheetId, "Summary Sheet!A2:E");
-    const table = document.createElement("table");
-    const headers = ["Name", "Total Payment", "Pending", "Prepay Balance"];
-    const headerRow = document.createElement("tr");
-
-    headers.forEach(header => {
-        const th = document.createElement("th");
-        th.textContent = header;
-        headerRow.appendChild(th);
-    });
-
-    table.appendChild(headerRow);
-
-    data.forEach(row => {
-        const tr = document.createElement("tr");
-        row.slice(1).forEach(cell => {
-            const td = document.createElement("td");
-            td.textContent = cell;
-            tr.appendChild(td);
-        });
-        table.appendChild(tr);
-    });
-
-    document.getElementById("playerTable").appendChild(table);
+// Fetch and parse CSV data
+async function fetchCSVData(url) {
+    try {
+        const response = await fetch(url);
+        const csvText = await response.text();
+        return parseCSV(csvText);
+    } catch (error) {
+        console.error('Error fetching CSV:', error);
+        return [];
+    }
 }
 
-async function loadAttendanceChart() {
-    const data = await fetchSheetData(attendanceSheetId, "AttOut!A2:E");
-    const months = [...new Set(data.map(row => row[2]))];
-    const sessionCounts = months.map(month => 
-        data.filter(row => row[2] === month).length
+// Load all data
+async function loadData() {
+    // Show loading indicators
+    document.getElementById('summaryLoading').style.display = 'block';
+    document.getElementById('attendanceLoading').style.display = 'block';
+
+    try {
+        // Fetch both CSVs concurrently
+        [summaryData, attendanceData] = await Promise.all([
+            fetchCSVData(SUMMARY_URL),
+            fetchCSVData(ATTENDANCE_URL)
+        ]);
+
+        // Remove headers
+        summaryData = summaryData.slice(1);
+        attendanceData = attendanceData.slice(1);
+
+        populateNameDropdown();
+        populateMonthDropdown();
+        updateTables();
+    } catch (error) {
+        console.error('Error loading data:', error);
+    } finally {
+        // Hide loading indicators
+        document.getElementById('summaryLoading').style.display = 'none';
+        document.getElementById('attendanceLoading').style.display = 'none';
+    }
+}
+
+// Populate the name dropdown
+function populateNameDropdown() {
+    const nameSelect = document.getElementById('nameFilter');
+    const names = [...new Set(summaryData.map(row => row[1]))].sort();
+    
+    nameSelect.innerHTML = '<option value="">Select Name</option>';
+    names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        nameSelect.appendChild(option);
+    });
+}
+
+// Populate the month dropdown
+function populateMonthDropdown() {
+    const monthSelect = document.getElementById('monthFilter');
+    const months = [...new Set(attendanceData.map(row => row[2]))].sort();
+    
+    monthSelect.innerHTML = '<option value="">Select Month</option>';
+    months.forEach(month => {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = month;
+        monthSelect.appendChild(option);
+    });
+}
+
+// Update both tables based on filters
+function updateTables() {
+    const selectedName = document.getElementById('nameFilter').value;
+    const selectedMonth = document.getElementById('monthFilter').value;
+
+    // Update summary table
+    const summaryTableBody = document.querySelector('#summaryTable tbody');
+    summaryTableBody.innerHTML = '';
+
+    const filteredSummary = summaryData.filter(row => 
+        !selectedName || row[1] === selectedName
     );
 
-    const ctx = document.getElementById("attendanceChart").getContext("2d");
-    new Chart(ctx, {
-        type: "bar",
-        data: {
-            labels: months,
-            datasets: [{
-                label: "Sessions",
-                data: sessionCounts,
-                backgroundColor: "rgba(75, 192, 192, 0.2)",
-                borderColor: "rgba(75, 192, 192, 1)",
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            onClick(event, elements) {
-                if (elements.length) {
-                    const index = elements[0].index;
-                    const month = months[index];
-                    const details = data.filter(row => row[2] === month);
-                    showPopup(details);
-                }
-            }
-        }
+    filteredSummary.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${row[1]}</td>
+            <td>${row[6]}</td>
+            <td>${row[5]}</td>
+        `;
+        summaryTableBody.appendChild(tr);
+    });
+
+    // Update attendance table
+    const attendanceTableBody = document.querySelector('#attendanceTable tbody');
+    attendanceTableBody.innerHTML = '';
+
+    const filteredAttendance = attendanceData.filter(row =>
+        (!selectedName || row[0] === selectedName) &&
+        (!selectedMonth || row[2] === selectedMonth)
+    );
+
+    filteredAttendance.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${row[0]}</td>
+            <td>${row[1]}</td>
+            <td>${row[2]}</td>
+            <td>${row[3]}</td>
+            <td>${row[4]}</td>
+        `;
+        attendanceTableBody.appendChild(tr);
     });
 }
 
-function showPopup(details) {
-    const popup = document.getElementById("popup");
-    popup.innerHTML = "<h3>Session Details</h3><ul>" + 
-        details.map(row => `<li>${row.join(", ")}</li>`).join("") + 
-        "</ul>";
-    popup.style.display = "block";
-    popup.addEventListener("click", () => {
-        popup.style.display = "none";
-    });
-}
+// Add event listeners
+document.getElementById('nameFilter').addEventListener('change', updateTables);
+document.getElementById('monthFilter').addEventListener('change', updateTables);
+
+// Initialize data loading
+loadData();
