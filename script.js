@@ -36,7 +36,6 @@ const populateFilters = (names, months) => {
   });
 };
 
-
 const populateTables = (summaryData, attendanceData) => {
   const pendingTable = document.getElementById("pendingTable");
   const attendanceTable = document.getElementById("attendanceTable");
@@ -98,7 +97,7 @@ const filterPendingPayments = () => {
 // Attach Event Listener to Filter Pending Button
 document.getElementById("filterPendingButton").addEventListener("click", filterPendingPayments);
 
-let isShowingPendingOnly = false; // Track the toggle state
+let isShowingPendingOnly = true; // Track the toggle state
 
 const togglePendingPayments = () => {
   const pendingTable = document.getElementById("pendingTable");
@@ -124,6 +123,7 @@ const togglePendingPayments = () => {
 
 // Attach Event Listener to the Button
 document.getElementById("filterPendingButton").addEventListener("click", togglePendingPayments);
+document.getElementById("filterPendingButton").textContent = "Show All Records"; // Set the initial state of the button text
 
 let isShowingPrepayOnly = false; // Track the toggle state for Prepay records
 
@@ -150,8 +150,6 @@ const togglePrepayRecords = () => {
 
 // Attach Event Listener to the new Button
 document.getElementById("filterPrepayButton").addEventListener("click", togglePrepayRecords);
-
-
 
 // Main Function
 (async () => {
