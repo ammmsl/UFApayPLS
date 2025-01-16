@@ -41,13 +41,16 @@ const populateTables = (summaryData, attendanceData) => {
   const attendanceTable = document.getElementById("attendanceTable");
 
   summaryData.forEach(row => {
-    const tr = document.createElement("tr");
-    row.slice(1, 4).forEach(cell => {
-      const td = document.createElement("td");
-      td.textContent = cell;
-      tr.appendChild(td);
-    });
-    pendingTable.appendChild(tr);
+    const pendingPayment = parseFloat(row[2] || "0");
+    if (pendingPayment !== 0) {
+      const tr = document.createElement("tr");
+      row.slice(1, 4).forEach(cell => {
+        const td = document.createElement("td");
+        td.textContent = cell;
+        tr.appendChild(td);
+      });
+      pendingTable.appendChild(tr);
+    }
   });
 
   attendanceData.forEach(row => {
