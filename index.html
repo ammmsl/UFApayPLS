@@ -8,7 +8,6 @@
 </head>
 <body>
   <header>
-    <!-- Removed the existing h1 tag and added the img tag -->
     <img src="webBanner.png" alt="Ultimate Frisbee Association Embedded Logo">
     <p>Pending Payments updated till 15th January 2025</p>
   </header>
@@ -18,8 +17,7 @@
       <select id="nameFilter">
         <option value="all">All</option>
       </select>
-      
-      <!-- Removed monthFilter from here -->
+
       <button id="filterPendingButton">Show Pending Payments</button>
       <button id="filterPrepayButton">Show Prepay Records</button>
     </section>
@@ -38,14 +36,17 @@
           <tbody id="pendingTable"></tbody>
         </table>
       </div>
-      <!-- Added monthFilter here -->
       <label for="monthFilter">Select Month:</label>
       <select id="monthFilter">
         <option value="all">All</option>
       </select>
 
-      <button id="filter2024Button">Show 2024 Records</button>
-      <button id="filter2025Button">Show 2025 Records</button>
+      <label>
+        <input type="checkbox" id="filter2024Button"> Show 2024 Records
+      </label>
+      <label>
+        <input type="checkbox" id="filter2025Button"> Show 2025 Records
+      </label>
     </section>
 
     <section id="attendanceRecords">
