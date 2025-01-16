@@ -138,10 +138,10 @@ const togglePrepayRecords = () => {
     });
     button.textContent = "Show Prepay Balance";
   } else {
-    // Show only rows where "Pending payment" is 0
+    // Show only rows where "Prepay Balance" is not 0
     Array.from(pendingTable.rows).forEach(row => {
-      const pendingPayment = parseFloat(row.cells[1]?.textContent || "0");
-      row.style.display = pendingPayment === 0 ? "" : "none";
+      const prepayBalance = parseFloat(row.cells[2]?.textContent || "0"); // Update to check the correct column
+      row.style.display = prepayBalance !== 0 ? "" : "none";
     });
     button.textContent = "Show All Records";
   }
