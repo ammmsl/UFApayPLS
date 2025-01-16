@@ -179,7 +179,7 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
 
   // Initially filter pending payments
   filterPendingPayments();
-  // Add event listeners for the year filter buttons
-  document.getElementById('filter2024Button').addEventListener('click', applyFilters);
-  document.getElementById('filter2025Button').addEventListener('click', applyFilters);
+  // Add event listeners for the year filter checkboxes
+  document.getElementById('filter2024Button').addEventListener('change', applyFilters);
+  document.getElementById('filter2025Button').addEventListener('change', applyFilters);
 })();
