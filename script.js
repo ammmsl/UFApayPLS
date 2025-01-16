@@ -64,6 +64,8 @@ const populateTables = (summaryData, attendanceData) => {
 const applyFilters = () => {
   const nameFilter = document.getElementById("nameFilter").value;
   const monthFilter = document.getElementById("monthFilter").value;
+  const yearFilter2024 = document.getElementById('filter2024Button').checked;
+  const yearFilter2025 = document.getElementById('filter2025Button').checked;
 
   const pendingTable = document.getElementById("pendingTable");
   const attendanceTable = document.getElementById("attendanceTable");
@@ -78,9 +80,14 @@ const applyFilters = () => {
   Array.from(attendanceTable.rows).forEach(row => {
     const name = row.cells[0]?.textContent;
     const month = row.cells[2]?.textContent;
+    const date = row.cells[3]?.textContent.trim(); // Assuming Date is the 4th column
+
+    const yearFilter = (yearFilter2024 && date.endsWith('2024')) || (yearFilter2025 && date.endsWith('2025')) || (!yearFilter2024 && !yearFilter2025);
+
     row.style.display = (
       (nameFilter === "all" || name === nameFilter) &&
-      (monthFilter === "all" || month === monthFilter)
+      (monthFilter === "all" || month === monthFilter) &&
+      yearFilter
     ) ? "" : "none";
   });
 };
@@ -173,25 +180,6 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
   // Initially filter pending payments
   filterPendingPayments();
   // Add event listeners for the year filter buttons
-document.getElementById('filter2024Button').addEventListener('click', function() {
-  filterByYear('2024');
-});
-
-document.getElementById('filter2025Button').addEventListener('click', function() {
-  filterByYear('2025');
-});
-
-function filterByYear(year) {
-  const rows = document.querySelectorAll('#attendanceTable tr');
-  rows.forEach(row => {
-    const dateCell = row.querySelector('td:nth-child(4)'); // Assuming Date is the 4th column
-    const date = dateCell ? dateCell.textContent.trim() : '';
-    if (date.endsWith(year)) {
-      row.style.display = ''; // Show row
-    } else {
-      row.style.display = 'none'; // Hide row
-    }
-  });
-}
-
+  document.getElementById('filter2024Button').addEventListener('click', applyFilters);
+  document.getElementById('filter2025Button').addEventListener('click', applyFilters);
 })();
