@@ -10,11 +10,24 @@ const fetchData = async (sheetName) => {
 
 const populateFilters = (names, months) => {
   const nameFilter = document.getElementById("nameFilter");
-  names.forEach(name => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    nameFilter.appendChild(option);
+  const nameSearch = document.getElementById("nameSearch");
+  
+  const updateNameFilter = (filteredNames) => {
+    nameFilter.innerHTML = '<option value="all">All</option>'; // Reset options
+    filteredNames.forEach(name => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      nameFilter.appendChild(option);
+    });
+  };
+
+  updateNameFilter(names); // Populate initially with all names
+
+  nameSearch.addEventListener("input", () => {
+    const searchValue = nameSearch.value.toLowerCase();
+    const filteredNames = names.filter(name => name.toLowerCase().includes(searchValue));
+    updateNameFilter(filteredNames);
   });
 
   // Sort months in chronological order
