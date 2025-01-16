@@ -1,26 +1,3 @@
-// Add event listeners for the year filter buttons
-document.getElementById('filter2024Button').addEventListener('click', function() {
-  filterByYear('2024');
-});
-
-document.getElementById('filter2025Button').addEventListener('click', function() {
-  filterByYear('2025');
-});
-
-function filterByYear(year) {
-  const rows = document.querySelectorAll('#attendanceTable tr');
-  rows.forEach(row => {
-    const dateCell = row.querySelector('td:nth-child(4)'); // Assuming Date is the 4th column
-    const date = dateCell ? dateCell.textContent.trim() : '';
-    if (date.endsWith(year)) {
-      row.style.display = ''; // Show row
-    } else {
-      row.style.display = 'none'; // Hide row
-    }
-  });
-}
-
-// Existing code
 const apiKey = "AIzaSyB4FKQrbrtGpBztkZVriYkEGsXlnLXHAN0";
 const sheetID = "1kI6E4J0pL4lUa2NH-FYEd2rWUE7Uzsz-CnGOg68ERtc";
 const baseURL = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values`;
@@ -195,4 +172,26 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
 
   // Initially filter pending payments
   filterPendingPayments();
+  // Add event listeners for the year filter buttons
+document.getElementById('filter2024Button').addEventListener('click', function() {
+  filterByYear('2024');
+});
+
+document.getElementById('filter2025Button').addEventListener('click', function() {
+  filterByYear('2025');
+});
+
+function filterByYear(year) {
+  const rows = document.querySelectorAll('#attendanceTable tr');
+  rows.forEach(row => {
+    const dateCell = row.querySelector('td:nth-child(4)'); // Assuming Date is the 4th column
+    const date = dateCell ? dateCell.textContent.trim() : '';
+    if (date.endsWith(year)) {
+      row.style.display = ''; // Show row
+    } else {
+      row.style.display = 'none'; // Hide row
+    }
+  });
+}
+
 })();
