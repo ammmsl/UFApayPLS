@@ -15,6 +15,12 @@ main {
   padding: 20px;
 }
 
+.table-container {
+  max-height: 300px; /* Set a fixed height for the container */
+  overflow-y: auto;  /* Enable vertical scrolling */
+  overflow-x: auto;  /* Enable horizontal scrolling if needed */
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
