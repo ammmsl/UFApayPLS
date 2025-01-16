@@ -12,50 +12,54 @@
     <p>Select your name to view pending payments</p>
   </header>
   <main>
-	<section id="filters">
-	  <label for="nameFilter">Select Name:</label>
-	  <select id="nameFilter">
-		<option value="all">All</option>
-	  </select>
+    <section id="filters">
+      <label for="nameFilter">Select Name:</label>
+      <select id="nameFilter">
+        <option value="all">All</option>
+      </select>
 
-	  <label for="monthFilter">Select Month:</label>
-	  <select id="monthFilter">
-		<option value="all">All</option>
-	  </select>
+      <label for="monthFilter">Select Month:</label>
+      <select id="monthFilter">
+        <option value="all">All</option>
+      </select>
 
-	  <!-- New Button -->
-	  <button id="filterPendingButton">Show Pending Payments</button>
-	  <button id="filterPrepayButton">Show Prepay Records</button>
-	</section>
+      <!-- New Button -->
+      <button id="filterPendingButton">Show Pending Payments</button>
+      <button id="filterPrepayButton">Show Prepay Records</button>
+    </section>
 
     <section id="pendingRecords">
       <h2>Pending/Prepay Records</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Pending</th>
-            <th>Prepay Balance</th>		
-          </tr>
-        </thead>
-        <tbody id="pendingTable"></tbody>
-      </table>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Pending</th>
+              <th>Prepay Balance</th>    
+            </tr>
+          </thead>
+          <tbody id="pendingTable"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="attendanceRecords">
       <h2>Attendance Records</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Location</th>
-            <th>Month</th>
-            <th>Date</th>
-            <th>Cost Per Session</th>
-          </tr>
-        </thead>
-        <tbody id="attendanceTable"></tbody>
-      </table>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Location</th>
+              <th>Month</th>
+              <th>Date</th>
+              <th>Cost Per Session</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTable"></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script src="script.js"></script>
