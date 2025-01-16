@@ -1,5 +1,5 @@
-const apiKey = "AIzaSyB4FKQrbrtGpBztkZVriYkEGsXlnLXHAN0";
-const sheetID = "1kI6E4J0pL4lUa2NH-FYEd2rWUE7Uzsz-CnGOg68ERtc";
+const apiKey = "YOUR_API_KEY";
+const sheetID = "YOUR_SHEET_ID";
 const baseURL = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values`;
 
 const fetchData = async (sheetName) => {
@@ -11,7 +11,7 @@ const fetchData = async (sheetName) => {
 const populateFilters = (names, months) => {
   const nameFilter = document.getElementById("nameFilter");
   const nameSearch = document.getElementById("nameSearch");
-  
+
   const updateNameFilter = (filteredNames) => {
     nameFilter.innerHTML = '<option value="all">All</option>'; // Reset options
     filteredNames.forEach(name => {
@@ -20,14 +20,26 @@ const populateFilters = (names, months) => {
       option.textContent = name;
       nameFilter.appendChild(option);
     });
+
+    // Show the dropdown
+    nameFilter.size = nameFilter.options.length;
   };
 
   updateNameFilter(names); // Populate initially with all names
+
+  nameSearch.addEventListener("focus", () => {
+    updateNameFilter(names);
+  });
 
   nameSearch.addEventListener("input", () => {
     const searchValue = nameSearch.value.toLowerCase();
     const filteredNames = names.filter(name => name.toLowerCase().includes(searchValue));
     updateNameFilter(filteredNames);
+  });
+
+  nameFilter.addEventListener("change", () => {
+    nameSearch.value = nameFilter.value;
+    nameFilter.size = 1; // Collapse the dropdown
   });
 
   // Sort months in chronological order
