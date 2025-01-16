@@ -41,3 +41,9 @@ select {
   margin-right: 10px;
   padding: 5px;
 }
+
+#nameSearch {
+  margin-right: 10px;
+  padding: 5px;
+  width: 200px; /* Adjust the width as needed */
+}
