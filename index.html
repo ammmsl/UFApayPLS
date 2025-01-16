@@ -17,13 +17,8 @@
       <select id="nameFilter">
         <option value="all">All</option>
       </select>
-
-      <label for="monthFilter">Select Month:</label>
-      <select id="monthFilter">
-        <option value="all">All</option>
-      </select>
-
-      <!-- New Button -->
+      
+      <!-- Removed monthFilter from here -->
       <button id="filterPendingButton">Show Pending Payments</button>
       <button id="filterPrepayButton">Show Prepay Records</button>
     </section>
@@ -42,6 +37,11 @@
           <tbody id="pendingTable"></tbody>
         </table>
       </div>
+      <!-- Added monthFilter here -->
+      <label for="monthFilter">Select Month:</label>
+      <select id="monthFilter">
+        <option value="all">All</option>
+      </select>
     </section>
 
     <section id="attendanceRecords">
