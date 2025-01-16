@@ -134,21 +134,22 @@ const togglePrepayRecords = () => {
   const pendingTable = document.getElementById("pendingTable"); 
   const button = document.getElementById("filterPrepayButton"); 
 
-  if (isShowingPendingOnly) {
+  if (isShowingPrepayOnly) {
     // Show all records
     Array.from(pendingTable.rows).forEach(row => {
       row.style.display = ""; // Reset display
     });
     button.textContent = "Show Prepay Balance";
   } else {
-      Array.from(pendingTable.rows).forEach(row => {
+    // Show only rows where "Pending payment" is 0
+    Array.from(pendingTable.rows).forEach(row => {
       const pendingPayment = parseFloat(row.cells[1]?.textContent || "0");
-      row.style.display = pendingPayment == 0 ? "" : "none";
+      row.style.display = pendingPayment === 0 ? "" : "none";
     });
     button.textContent = "Show All Records";
   }
 
-  isShowingPendingOnly = !isShowingPendingOnly; // Toggle the state
+  isShowingPrepayOnly = !isShowingPrepayOnly; // Toggle the state
 };
 
 // Attach Event Listener to the new Button
@@ -171,4 +172,7 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
   // Attach Event Listeners for Filtering
   document.getElementById("nameFilter").addEventListener("change", applyFilters);
   document.getElementById("monthFilter").addEventListener("change", applyFilters);
+
+  // Initially filter pending payments
+  filterPendingPayments();
 })();
