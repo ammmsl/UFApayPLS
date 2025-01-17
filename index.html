@@ -13,12 +13,16 @@
   </header>
   <main>
     <section id="filters">
-      <label for="combinedSearch">Search/Select Name:</label>
-      <input type="text" id="combinedSearch" placeholder="Type to search...">
+      <label for="nameSearch">Search Name:</label>
+      <input type="text" id="nameSearch" placeholder="Type to search...">
+      <label for="nameFilter">Select Name:</label>
+      <select id="nameFilter">
+        <option value="all">All</option>
+      </select>
       <button id="filterPendingButton">Show Pending Payments</button>
       <button id="filterPrepayButton">Show Prepay Records</button>
     </section>
-    <!-- Rest of the HTML remains the same -->
+
     <section id="pendingRecords">
       <h2>Pending/Prepay Records</h2>
       <div class="table-container">
@@ -37,6 +41,7 @@
       <select id="monthFilter">
         <option value="all">All</option>
       </select>
+
       <label>
         <input type="checkbox" id="filter2024Button"> Show 2024 Records
       </label>
@@ -44,6 +49,7 @@
         <input type="checkbox" id="filter2025Button"> Show 2025 Records
       </label>
     </section>
+
     <section id="attendanceRecords">
       <h2>Attendance Records</h2>
       <div class="table-container">
