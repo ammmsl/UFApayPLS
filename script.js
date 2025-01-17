@@ -9,38 +9,57 @@ const fetchData = async (sheetName) => {
 };
 
 const populateFilters = (names, months) => {
-  const nameFilter = document.getElementById("nameFilter");
-  const nameSearch = document.getElementById("nameSearch");
+  const combinedSearch = document.getElementById("combinedSearch");
 
-  const updateNameFilter = (filteredNames) => {
-    nameFilter.innerHTML = '<option value="all">All</option>'; // Reset options
+  const updateCombinedSearch = (filteredNames) => {
+    // Clear previous datalist options
+    let dataList = document.getElementById("nameOptions");
+    if (dataList) {
+      dataList.innerHTML = "";
+    } else {
+      dataList = document.createElement("datalist");
+      dataList.id = "nameOptions";
+      document.body.appendChild(dataList);
+    }
+
+    // Populate datalist with filtered names
     filteredNames.forEach(name => {
       const option = document.createElement("option");
       option.value = name;
-      option.textContent = name;
-      nameFilter.appendChild(option);
+      dataList.appendChild(option);
     });
 
-    // Show the dropdown
-    nameFilter.size = nameFilter.options.length;
+    // Attach datalist to the input
+    combinedSearch.setAttribute("list", "nameOptions");
   };
 
-  updateNameFilter(names); // Populate initially with all names
+  updateCombinedSearch(names); // Populate initially with all names
 
-  nameSearch.addEventListener("focus", () => {
-    updateNameFilter(names);
-  });
-
-  nameSearch.addEventListener("input", () => {
-    const searchValue = nameSearch.value.toLowerCase();
+  combinedSearch.addEventListener("input", () => {
+    const searchValue = combinedSearch.value.toLowerCase();
     const filteredNames = names.filter(name => name.toLowerCase().includes(searchValue));
-    updateNameFilter(filteredNames);
+    updateCombinedSearch(filteredNames);
   });
 
-  nameFilter.addEventListener("change", () => {
-    nameSearch.value = nameFilter.value;
-    nameFilter.size = 1; // Collapse the dropdown
+  // Sort months in chronological order
+  const monthOrder = [
+    "January", "February", "March", "April", "May", "June", "July", "August", 
+    "September", "October", "November", "December"
+  ];
+
+  const sortedMonths = months.sort((a, b) => {
+    return monthOrder.indexOf(a) - monthOrder.indexOf(b); // Sort by month name order
   });
+
+  const monthFilter = document.getElementById("monthFilter");
+  sortedMonths.forEach(month => {
+    const option = document.createElement("option");
+    option.value = month;
+    option.textContent = month;
+    monthFilter.appendChild(option);
+  });
+};
+
 
   // Sort months in chronological order
   const monthOrder = [
