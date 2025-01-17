@@ -1,5 +1,5 @@
-const apiKey = "YOUR_API_KEY";
-const sheetID = "YOUR_SHEET_ID";
+const apiKey = "AIzaSyB4FKQrbrtGpBztkZVriYkEGsXlnLXHAN0";
+const sheetID = "1kI6E4J0pL4lUa2NH-FYEd2rWUE7Uzsz-CnGOg68ERtc";
 const baseURL = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values`;
 
 const fetchData = async (sheetName) => {
