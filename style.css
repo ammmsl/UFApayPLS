@@ -47,11 +47,3 @@ select {
   padding: 5px;
   width: 200px; /* Adjust the width as needed */
 }
-
-/* New CSS for table highlighting */
-td:has(~ td:hover), /* previous sibling cells */
-table:has(td:nth-of-type(3):hover) /* column cells */
-tr:not(:first-of-type):has(~ tr:hover)
-td:nth-of-type(3) {
-  background: var(--highlighted);
-}
