@@ -8,6 +8,11 @@ const fetchData = async (sheetName) => {
   return data.values;
 };
 
+const updateLastUpdatedDate = (date) => {
+  const lastUpdatedElement = document.querySelector('header p');
+  lastUpdatedElement.textContent = `Pending Payments updated till ${date}`;
+};
+
 const populateFilters = (names, months) => {
   const nameFilter = document.getElementById("nameFilter");
   const nameSearch = document.getElementById("nameSearch");
@@ -185,6 +190,10 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
 
   populateFilters(names, months);
   populateTables(summaryData.slice(1), attendanceData.slice(1));
+
+  // Extract the last updated date from the summaryData
+  const lastUpdatedDate = summaryData[1][0]; // Assuming the first row and first column contains the last updated date
+  updateLastUpdatedDate(lastUpdatedDate);
 
   // Attach Event Listeners for Filtering
   document.getElementById("nameFilter").addEventListener("change", applyFilters);
