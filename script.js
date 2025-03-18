@@ -9,8 +9,10 @@ const fetchData = async (sheetName) => {
 };
 
 const updateLastUpdatedDate = (date) => {
-  const lastUpdatedElement = document.querySelector('header p');
-  lastUpdatedElement.textContent = `Pending Payments updated till ${date}`;
+  const lastUpdatedElement = document.querySelector('#lastUpdated');
+  // Format the date to "DD/MM/YYYY"
+  const formattedDate = new Date(date).toLocaleDateString('en-GB');
+  lastUpdatedElement.textContent = `Pending Payments updated till ${formattedDate}`;
 };
 
 const populateFilters = (names, months) => {
