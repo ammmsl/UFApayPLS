@@ -8,13 +8,6 @@ const fetchData = async (sheetName) => {
   return data.values;
 };
 
-const updateLastUpdatedDate = (date) => {
-  const lastUpdatedElement = document.querySelector('#lastUpdated');
-  // Format the date to "DD/MM/YYYY"
-  const formattedDate = new Date(date).toLocaleDateString('en-GB');
-  lastUpdatedElement.textContent = `Pending Payments updated till ${formattedDate}`;
-};
-
 const populateFilters = (names, months) => {
   const nameFilter = document.getElementById("nameFilter");
   const nameSearch = document.getElementById("nameSearch");
@@ -192,10 +185,6 @@ document.getElementById("filterPrepayButton").addEventListener("click", togglePr
 
   populateFilters(names, months);
   populateTables(summaryData.slice(1), attendanceData.slice(1));
-
-  // Extract the last updated date from the summaryData
-  const lastUpdatedDate = summaryData[1][0]; // Assuming the first row and first column contains the last updated date
-  updateLastUpdatedDate(lastUpdatedDate);
 
   // Attach Event Listeners for Filtering
   document.getElementById("nameFilter").addEventListener("change", applyFilters);
