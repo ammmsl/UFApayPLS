@@ -3,71 +3,1207 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UFA Central</title>
-  <link rel="stylesheet" href="style.css">
+  <title>UFA Central - Payment Tracker</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(145deg, #dfc9ff 0%, #92c9ff 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .logo {
+      color: #488daa;
+      font-size: 2.5rem;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 1.1rem;
+    }
+
+    .search-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .search-container {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 250px;
+      padding: 15px 20px;
+      border: 2px solid #e1e5e9;
+      border-radius: 12px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #488daa;
+      box-shadow: 0 0 0 3px rgba(72, 141, 170, 0.1);
+    }
+
+    .btn {
+      padding: 15px 25px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #488daa, #357a96);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(72, 141, 170, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f8f9fa;
+      color: #495057;
+      border: 2px solid #e9ecef;
+    }
+
+    .btn-secondary:hover {
+      background: #e9ecef;
+      transform: translateY(-1px);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-size: 1.1rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #488daa;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 20px;
+    }
+
+    .summary-item {
+      text-align: center;
+      padding: 20px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    }
+
+    .summary-value {
+      font-size: min(2rem, 5vw);
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .summary-label {
+      font-size: min(0.9rem, 3vw);
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .pending {
+      background: linear-gradient(135deg, #ffebee, #ffcdd2);
+      color: #c62828;
+    }
+
+    .prepaid {
+      background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
+      color: #2e7d32;
+    }
+
+    .neutral {
+      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      color: #374151;
+    }
+
+    .table-container {
+      max-height: 400px;
+      overflow-y: auto;
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid #e1e5e9;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 600px;
+    }
+
+    th {
+      background: #f8f9fa;
+      padding: 15px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      border-bottom: 2px solid #e9ecef;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover {
+      background: #e9ecef;
+    }
+
+    th.sortable::after {
+      content: ' ↕';
+      opacity: 0.5;
+    }
+
+    th.sort-asc::after {
+      content: ' ↑';
+      opacity: 1;
+    }
+
+    th.sort-desc::after {
+      content: ' ↓';
+      opacity: 1;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #e9ecef;
+      vertical-align: middle;
+      font-size: min(14px, 3.5vw);
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: min(0.8rem, 2.5vw);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-member {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .status-non-member {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .filters {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 120px;
+    }
+
+    .filter-label {
+      font-size: min(0.85rem, 3vw);
+      font-weight: 600;
+      color: #495057;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input[type="date"] {
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      font-size: min(14px, 3.5vw);
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+      font-style: italic;
+    }
+
+    .highlight {
+      background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+      border-left: 4px solid #ffc107;
+    }
+
+    .quick-stats {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .quick-stat {
+      text-align: center;
+    }
+
+    .quick-stat-value {
+      font-size: min(1.4rem, 4vw);
+      font-weight: bold;
+      color: #488daa;
+    }
+
+    .quick-stat-label {
+      font-size: min(0.8rem, 2.5vw);
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .payment-detail-item {
+      text-align: center;
+      padding: 12px 8px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #f8fafe, #eef7ff);
+      border: 1px solid #e3f2fd;
+    }
+
+    .payment-detail-label {
+      font-size: min(0.75rem, 2.2vw);
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .payment-detail-value {
+      font-size: min(0.9rem, 2.8vw);
+      font-weight: 600;
+      color: #1565c0;
+      word-break: break-word;
+      line-height: 1.2;
+    }
+
+    .welcome-message {
+      background: linear-gradient(135deg, #e8f4f8, #d4edda);
+      border: 1px solid #b8daff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .welcome-title {
+      font-size: min(1.4rem, 4.5vw);
+      font-weight: 600;
+      color: #155724;
+      margin-bottom: 8px;
+    }
+
+    .welcome-subtitle {
+      color: #155724;
+      opacity: 0.8;
+      font-size: min(1rem, 3.5vw);
+    }
+
+    /* Mobile-specific optimizations */
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px;
+      }
+      
+      .search-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .search-input {
+        min-width: unset;
+      }
+      
+      .dashboard {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      
+      .filter-group {
+        min-width: unset;
+      }
+      
+      .summary-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .logo {
+        font-size: 2rem;
+      }
+
+      .subtitle {
+        font-size: 1rem;
+      }
+
+      header {
+        padding: 20px;
+      }
+
+      .search-section {
+        padding: 20px;
+      }
+
+      .btn {
+        padding: 12px 20px;
+        font-size: 12px;
+      }
+
+      .quick-stats {
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .payment-detail-item {
+        padding: 10px 6px;
+      }
+
+      .payment-detail-label {
+        font-size: 0.7rem;
+        margin-bottom: 4px;
+      }
+
+      .payment-detail-value {
+        font-size: 0.85rem;
+      }
+
+      table {
+        min-width: 500px;
+        font-size: 12px;
+      }
+
+      th, td {
+        padding: 8px 6px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 5px;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .logo {
+        font-size: 1.8rem;
+      }
+
+      .card-title {
+        font-size: 1.1rem;
+      }
+
+      table {
+        min-width: 450px;
+        font-size: 11px;
+      }
+
+      th, td {
+        padding: 6px 4px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <img src="webBanner.png" alt="Ultimate Frisbee Association Embedded Logo">
-    <p>Pending Sessions updated till 1st August 2025</p>
-  </header>
-  <main>
-    <section id="filters">
-      <label for="nameSearch">Search Name:</label>
-      <input type="text" id="nameSearch" placeholder="Type then select from dropdown...">
-      <label for="nameFilter">Select Name:</label>
-      <select id="nameFilter">
-        <option value="all">All</option>
-      </select>
-      <button id="filterPendingButton">Show Pending Payments</button>
-      <button id="filterPrepayButton">Show Prepay Records</button>
-    </section>
-
-    <section id="pendingRecords">
-      <h2>Pending/Prepay Records</h2>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Pending</th>
-              <th>Prepay Balance</th>    
-            </tr>
-          </thead>
-          <tbody id="pendingTable"></tbody>
-        </table>
+  <div class="container">
+    <header>
+      <div class="logo">🥏 UFA Central</div>
+      <div class="subtitle">Ultimate Frisbee Association Payment Tracker</div>
+      <div style="margin-top: 15px; font-size: 0.9rem; color: #888;">
+        Updated till 1st August 2025
       </div>
-      <label for="monthFilter">Select Month:</label>
-      <select id="monthFilter">
-        <option value="all">All</option>
-      </select>
+    </header>
 
-      <label>
-        <input type="checkbox" id="filter2024Button"> Show 2024 Records
-      </label>
-      <label>
-        <input type="checkbox" id="filter2025Button"> Show 2025 Records
-      </label>
-    </section>
-
-    <section id="attendanceRecords">
-      <h2>Attendance Records</h2>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Location</th>
-              <th>Month</th>
-              <th>Date</th>
-              <th>Cost Per Session</th>
-            </tr>
-          </thead>
-          <tbody id="attendanceTable"></tbody>
-        </table>
+    <div class="search-section">
+      <h2 style="margin-top: 0; color: #333; font-size: 1.5rem;">Find Your Payment Status</h2>
+      <div class="search-container">
+        <input type="text" id="nameSearch" class="search-input" placeholder="Start typing your name...">
+        <button id="clearSearch" class="btn btn-secondary">Clear</button>
+        <button id="showAllData" class="btn btn-secondary">View All Data</button>
       </div>
-    </section>
-  </main>
-  <script src="script.js"></script>
+      
+      <div id="searchSuggestions" style="display: none; margin-top: 10px;">
+        <div style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">Select your name:</div>
+        <div id="suggestionList" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+      </div>
+    </div>
+
+    <div id="loadingState" class="loading">
+      <div class="spinner"></div>
+      Loading payment data...
+    </div>
+
+    <div id="welcomeMessage" class="welcome-message" style="display: none;">
+      <div class="welcome-title">Welcome to UFA Payment Tracker!</div>
+      <div class="welcome-subtitle">Search for your name above to view your personal payment status and attendance history.</div>
+    </div>
+
+    <div id="userDashboard" style="display: none;">
+      <div id="personalWelcome" class="welcome-message">
+        <div class="welcome-title">Welcome back, <span id="selectedUserName"></span>!</div>
+        <div class="welcome-subtitle">Here's your complete payment and attendance summary</div>
+      </div>
+
+      <div class="dashboard">
+        <div class="card">
+          <div class="card-title">
+            💰 Payment Summary
+          </div>
+          <div class="summary-grid">
+            <div id="pendingSummary" class="summary-item pending">
+              <div class="summary-value" id="pendingAmount">0</div>
+              <div class="summary-label">Pending</div>
+            </div>
+            <div id="prepaySummary" class="summary-item prepaid">
+              <div class="summary-value" id="prepayAmount">0</div>
+              <div class="summary-label">Prepaid</div>
+            </div>
+            <div class="summary-item neutral">
+              <div class="summary-value" id="totalPayment">0</div>
+              <div class="summary-label">Total Payment</div>
+            </div>
+          </div>
+          
+          <!-- Payment History Section -->
+          <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+            <div style="font-size: 1.1rem; font-weight: 600; color: #333; margin-bottom: 15px; text-align: center;">
+              📅 Payment History
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
+              <div class="payment-detail-item">
+                <div class="payment-detail-label">Last Payment Date</div>
+                <div class="payment-detail-value" id="lastPaymentDate">-</div>
+              </div>
+              <div class="payment-detail-item">
+                <div class="payment-detail-label">Last Payment Amount</div>
+                <div class="payment-detail-value" id="lastPaymentAmount">-</div>
+              </div>
+              <div class="payment-detail-item">
+                <div class="payment-detail-label">Last Covered Date</div>
+                <div class="payment-detail-value" id="lastCoveredDate">-</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="quick-stats">
+            <div class="quick-stat">
+              <div class="quick-stat-value" id="totalSessions">0</div>
+              <div class="quick-stat-label">Total Sessions</div>
+            </div>
+            <div class="quick-stat">
+              <div class="quick-stat-value" id="avgCost">0</div>
+              <div class="quick-stat-label">Avg Cost/Session</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            📊 Activity Overview
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item neutral">
+              <div class="summary-value" id="sessions2024">0</div>
+              <div class="summary-label">2024 Sessions</div>
+            </div>
+            <div class="summary-item neutral">
+              <div class="summary-value" id="sessions2025">0</div>
+              <div class="summary-label">2025 Sessions</div>
+            </div>
+            <div class="summary-item neutral">
+              <div class="summary-value" id="recentSessions">0</div>
+              <div class="summary-label">Last 30 Days</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          📅 Your Attendance History
+        </div>
+        
+        <div class="filters">
+          <div class="filter-group">
+            <label class="filter-label">Month</label>
+            <select id="monthFilter">
+              <option value="all">All Months</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Year</label>
+            <select id="yearFilter">
+              <option value="all">All Years</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Location</label>
+            <select id="locationFilter">
+              <option value="all">All Locations</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">From Date</label>
+            <input type="date" id="fromDate">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">To Date</label>
+            <input type="date" id="toDate">
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="sortable" data-column="0">Date</th>
+                <th class="sortable" data-column="1">Location</th>
+                <th class="sortable" data-column="2">Month</th>
+                <th class="sortable" data-column="3">Cost</th>
+                <th class="sortable" data-column="4">Membership</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceTable"></tbody>
+          </table>
+        </div>
+        <div id="noAttendanceData" class="no-data" style="display: none;">
+          No attendance records found for the selected filters.
+        </div>
+      </div>
+    </div>
+
+    <div id="allDataView" style="display: none;">
+      <div class="card">
+        <div class="card-title">
+          📋 All Payment Records
+        </div>
+        
+        <div class="filters">
+          <div class="filter-group">
+            <label class="filter-label">Filter By</label>
+            <select id="paymentStatusFilter">
+              <option value="all">All Records</option>
+              <option value="pending">Pending Payments</option>
+              <option value="prepaid">Prepaid Balance</option>
+              <option value="balanced">Balanced (0)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th class="sortable" data-column="0">Name</th>
+                <th class="sortable" data-column="1">Pending</th>
+                <th class="sortable" data-column="2">Prepay Balance</th>
+                <th class="sortable" data-column="3">Total Payment</th>
+              </tr>
+            </thead>
+            <tbody id="allPaymentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const apiKey = "AIzaSyB4FKQrbrtGpBztkZVriYkEGsXlnLXHAN0";
+    const sheetID = "1kI6E4J0pL4lUa2NH-FYEd2rWUE7Uzsz-CnGOg68ERtc";
+    const baseURL = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values`;
+
+    let summaryData = [];
+    let attendanceData = [];
+    let allNames = [];
+    let selectedUser = null;
+    let currentSortColumn = null;
+    let currentSortDirection = 'asc';
+
+    const fetchData = async (sheetName) => {
+      try {
+        const response = await fetch(`${baseURL}/${sheetName}?key=${apiKey}`);
+        if (!response.ok) throw new Error('Failed to fetch data');
+        const data = await response.json();
+        return data.values || [];
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        return [];
+      }
+    };
+
+    const formatCurrency = (amount) => {
+      return amount ? `${Math.abs(parseFloat(amount)).toFixed(0)} MVR` : '0 MVR';
+    };
+
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      const parts = dateStr.trim().split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        return new Date(year, month - 1, day);
+      }
+      return null;
+    };
+
+    const isWithinDateRange = (dateStr, fromDate, toDate) => {
+      const date = parseDate(dateStr);
+      if (!date) return true;
+      
+      if (fromDate && date < new Date(fromDate)) return false;
+      if (toDate && date > new Date(toDate)) return false;
+      return true;
+    };
+
+    const parseCostFromString = (costStr) => {
+      if (!costStr) return 0;
+      // Remove 'Rf' prefix and any other non-numeric characters except decimal point
+      const numericValue = costStr.toString().replace(/[^\d.-]/g, '');
+      return parseFloat(numericValue) || 0;
+    };
+
+    const setupTableSorting = () => {
+      document.querySelectorAll('th.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+          const column = parseInt(header.dataset.column);
+          const table = header.closest('table');
+          const tbody = table.querySelector('tbody');
+          const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
+          
+          // Toggle sort direction
+          if (currentSortColumn === column) {
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+          } else {
+            currentSortDirection = 'asc';
+            currentSortColumn = column;
+          }
+          
+          // Update header classes
+          document.querySelectorAll('th.sortable').forEach(h => {
+            h.classList.remove('sort-asc', 'sort-desc');
+          });
+          header.classList.add(currentSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+          
+          // Sort rows
+          rows.sort((a, b) => {
+            let aVal = a.cells[column]?.textContent?.trim() || '';
+            let bVal = b.cells[column]?.textContent?.trim() || '';
+            
+            // Handle different data types
+            if (column === 0) { // Date column
+              aVal = parseDate(aVal) || new Date(0);
+              bVal = parseDate(bVal) || new Date(0);
+            } else if (column === 3) { // Cost column - extract numeric value
+              aVal = parseCostFromString(aVal);
+              bVal = parseCostFromString(bVal);
+            } else if (aVal.includes('MVR') || bVal.includes('MVR')) { // Currency columns
+              aVal = parseCostFromString(aVal);
+              bVal = parseCostFromString(bVal);
+            }
+            
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+              return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            } else if (aVal instanceof Date && bVal instanceof Date) {
+              return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            } else {
+              // String comparison
+              aVal = aVal.toString().toLowerCase();
+              bVal = bVal.toString().toLowerCase();
+              return currentSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            }
+          });
+          
+          // Re-append sorted rows
+          rows.forEach(row => tbody.appendChild(row));
+        });
+      });
+    };
+
+    const initializeFilters = () => {
+      const months = [...new Set(attendanceData.map(row => row[2]))].filter(Boolean);
+      const locations = [...new Set(attendanceData.map(row => row[1]))].filter(Boolean);
+      
+      const monthFilter = document.getElementById('monthFilter');
+      months.forEach(month => {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = month;
+        monthFilter.appendChild(option);
+      });
+
+      const locationFilter = document.getElementById('locationFilter');
+      locations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location;
+        locationFilter.appendChild(option);
+      });
+    };
+
+    const setupSearch = () => {
+      const nameSearch = document.getElementById('nameSearch');
+      const suggestions = document.getElementById('searchSuggestions');
+      const suggestionList = document.getElementById('suggestionList');
+
+      nameSearch.addEventListener('input', (e) => {
+        const value = e.target.value.toLowerCase().trim();
+        
+        if (value.length > 0) {
+          const matches = allNames.filter(name => 
+            name.toLowerCase().includes(value)
+          ).slice(0, 10);
+          
+          if (matches.length > 0) {
+            suggestionList.innerHTML = '';
+            matches.forEach(name => {
+              const button = document.createElement('button');
+              button.className = 'btn btn-secondary';
+              button.textContent = name;
+              button.style.fontSize = '0.9rem';
+              button.onclick = () => selectUser(name);
+              suggestionList.appendChild(button);
+            });
+            suggestions.style.display = 'block';
+          } else {
+            suggestions.style.display = 'none';
+          }
+        } else {
+          suggestions.style.display = 'none';
+        }
+      });
+
+      document.getElementById('clearSearch').onclick = () => {
+        nameSearch.value = '';
+        suggestions.style.display = 'none';
+        showWelcome();
+      };
+
+      document.getElementById('showAllData').onclick = () => {
+        showAllData();
+      };
+    };
+
+    const selectUser = (userName) => {
+      selectedUser = userName;
+      document.getElementById('nameSearch').value = userName;
+      document.getElementById('searchSuggestions').style.display = 'none';
+      showUserDashboard(userName);
+    };
+
+    const showWelcome = () => {
+      document.getElementById('welcomeMessage').style.display = 'block';
+      document.getElementById('userDashboard').style.display = 'none';
+      document.getElementById('allDataView').style.display = 'none';
+    };
+
+    const showUserDashboard = (userName) => {
+      document.getElementById('welcomeMessage').style.display = 'none';
+      document.getElementById('userDashboard').style.display = 'block';
+      document.getElementById('allDataView').style.display = 'none';
+      
+      updateUserDashboard(userName);
+    };
+
+    const showAllData = () => {
+      document.getElementById('welcomeMessage').style.display = 'none';
+      document.getElementById('userDashboard').style.display = 'none';
+      document.getElementById('allDataView').style.display = 'block';
+      
+      populateAllPaymentsTable();
+    };
+
+    const updateUserDashboard = (userName) => {
+      document.getElementById('selectedUserName').textContent = userName;
+      
+      // Find user's payment summary
+      const userSummary = summaryData.find(row => row[1] === userName);
+      const userAttendance = attendanceData.filter(row => row[0] === userName);
+      
+      if (userSummary) {
+        const pending = parseFloat(userSummary[2]) || 0;
+        const prepay = parseFloat(userSummary[3]) || 0;
+        const totalPayment = parseFloat(userSummary[4]) || 0; // Column 4 is Total Payment
+        
+        // New fields from Summary Sheet
+        const lastPaymentDate = userSummary[7] || ''; // Column 7: Last Payment Date
+        const lastPaymentAmount = userSummary[8] || ''; // Column 8: Last Payment Amount
+        const lastCoveredDate = userSummary[9] || ''; // Column 9: Last Covered Date
+        
+        document.getElementById('pendingAmount').textContent = formatCurrency(pending);
+        document.getElementById('prepayAmount').textContent = formatCurrency(prepay);
+        document.getElementById('totalPayment').textContent = formatCurrency(totalPayment);
+        
+        // Update new payment history fields
+        document.getElementById('lastPaymentDate').textContent = lastPaymentDate || '-';
+        document.getElementById('lastPaymentAmount').textContent = lastPaymentAmount ? formatCurrency(parseCostFromString(lastPaymentAmount)) : '-';
+        document.getElementById('lastCoveredDate').textContent = lastCoveredDate || '-';
+      }
+      
+      // Calculate session statistics
+      const totalSessions = userAttendance.length;
+      document.getElementById('totalSessions').textContent = totalSessions;
+      
+      // Calculate average cost per session from attendance data (excluding zero-cost sessions)
+      const sessionsWithCost = userAttendance.filter(session => {
+        const costStr = session[4]; // Cost Per Session column
+        const cost = parseCostFromString(costStr);
+        return cost > 0; // Only include sessions with actual cost
+      });
+      
+      const totalCost = sessionsWithCost.reduce((sum, session) => {
+        const costStr = session[4]; // Cost Per Session column
+        const cost = parseCostFromString(costStr);
+        return sum + cost;
+      }, 0);
+      
+      const avgCost = sessionsWithCost.length > 0 ? totalCost / sessionsWithCost.length : 0;
+      document.getElementById('avgCost').textContent = `${avgCost.toFixed(0)} MVR`;
+      
+      // Calculate year-wise sessions
+      const sessions2024 = userAttendance.filter(row => row[3] && row[3].includes('2024')).length;
+      const sessions2025 = userAttendance.filter(row => row[3] && row[3].includes('2025')).length;
+      
+      document.getElementById('sessions2024').textContent = sessions2024;
+      document.getElementById('sessions2025').textContent = sessions2025;
+      
+      // Calculate recent sessions (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentSessions = userAttendance.filter(row => {
+        const sessionDate = parseDate(row[3]);
+        return sessionDate && sessionDate >= thirtyDaysAgo;
+      }).length;
+      
+      document.getElementById('recentSessions').textContent = recentSessions;
+      
+      populateUserAttendanceTable(userAttendance);
+    };
+
+    const populateUserAttendanceTable = (userAttendance) => {
+      const tbody = document.getElementById('attendanceTable');
+      tbody.innerHTML = '';
+      
+      userAttendance.forEach(row => {
+        const tr = document.createElement('tr');
+        
+        // Date
+        const dateCell = document.createElement('td');
+        dateCell.textContent = row[3] || '';
+        tr.appendChild(dateCell);
+        
+        // Location
+        const locationCell = document.createElement('td');
+        locationCell.textContent = row[1] || '';
+        tr.appendChild(locationCell);
+        
+        // Month
+        const monthCell = document.createElement('td');
+        monthCell.textContent = row[2] || '';
+        tr.appendChild(monthCell);
+        
+        // Cost - Parse from Cost Per Session column
+        const costCell = document.createElement('td');
+        const costStr = row[4] || '0'; // Cost Per Session column
+        const cost = parseCostFromString(costStr);
+        costCell.textContent = formatCurrency(cost);
+        tr.appendChild(costCell);
+        
+        // Membership Status - Get from Membership column
+        const statusCell = document.createElement('td');
+        const membershipStatus = row[6] || 'Member'; // Membership column
+        
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${membershipStatus === 'Non-Member' ? 'status-non-member' : 'status-member'}`;
+        badge.textContent = membershipStatus;
+        statusCell.appendChild(badge);
+        tr.appendChild(statusCell);
+        
+        tbody.appendChild(tr);
+      });
+      
+      applyAttendanceFilters();
+      setupTableSorting();
+    };
+
+    const populateAllPaymentsTable = () => {
+      const tbody = document.getElementById('allPaymentsTable');
+      tbody.innerHTML = '';
+      
+      summaryData.forEach(row => {
+        const tr = document.createElement('tr');
+        
+        // Name
+        const nameCell = document.createElement('td');
+        nameCell.textContent = row[1] || '';
+        tr.appendChild(nameCell);
+        
+        // Pending
+        const pendingCell = document.createElement('td');
+        const pending = parseFloat(row[2]) || 0;
+        pendingCell.textContent = formatCurrency(pending);
+        if (pending > 0) {
+          pendingCell.style.color = '#c62828';
+          pendingCell.style.fontWeight = 'bold';
+        }
+        tr.appendChild(pendingCell);
+        
+        // Prepay
+        const prepayCell = document.createElement('td');
+        const prepay = parseFloat(row[3]) || 0;
+        prepayCell.textContent = formatCurrency(prepay);
+        if (prepay > 0) {
+          prepayCell.style.color = '#2e7d32';
+          prepayCell.style.fontWeight = 'bold';
+        }
+        tr.appendChild(prepayCell);
+        
+        // Total Payment
+        const totalPaymentCell = document.createElement('td');
+        const totalPayment = parseFloat(row[4]) || 0; // Column 4 is Total Payment
+        totalPaymentCell.textContent = formatCurrency(totalPayment);
+        totalPaymentCell.style.fontWeight = 'bold';
+        totalPaymentCell.style.color = totalPayment > 0 ? '#2e7d32' : '#374151';
+        tr.appendChild(totalPaymentCell);
+        
+        tbody.appendChild(tr);
+      });
+      
+      applyPaymentFilters();
+      setupTableSorting();
+    };
+
+    const applyAttendanceFilters = () => {
+      const monthFilter = document.getElementById('monthFilter').value;
+      const yearFilter = document.getElementById('yearFilter').value;
+      const locationFilter = document.getElementById('locationFilter').value;
+      const fromDate = document.getElementById('fromDate').value;
+      const toDate = document.getElementById('toDate').value;
+      
+      const rows = document.querySelectorAll('#attendanceTable tr');
+      let visibleCount = 0;
+      
+      rows.forEach(row => {
+        const date = row.cells[0]?.textContent;
+        const location = row.cells[1]?.textContent;
+        const month = row.cells[2]?.textContent;
+        
+        const matchesMonth = monthFilter === 'all' || month === monthFilter;
+        const matchesYear = yearFilter === 'all' || date.includes(yearFilter);
+        const matchesLocation = locationFilter === 'all' || location === locationFilter;
+        const matchesDateRange = isWithinDateRange(date, fromDate, toDate);
+        
+        const isVisible = matchesMonth && matchesYear && matchesLocation && matchesDateRange;
+        row.style.display = isVisible ? '' : 'none';
+        if (isVisible) visibleCount++;
+      });
+      
+      document.getElementById('noAttendanceData').style.display = visibleCount === 0 ? 'block' : 'none';
+    };
+
+    const applyPaymentFilters = () => {
+      const statusFilter = document.getElementById('paymentStatusFilter').value;
+      const rows = document.querySelectorAll('#allPaymentsTable tr');
+      
+      rows.forEach(row => {
+        const pendingText = row.cells[1]?.textContent || '0';
+        const prepayText = row.cells[2]?.textContent || '0';
+        const totalPaymentText = row.cells[3]?.textContent || '0';
+        
+        const pending = parseCostFromString(pendingText);
+        const prepay = parseCostFromString(prepayText);
+        const totalPayment = parseCostFromString(totalPaymentText);
+        const netBalance = prepay - pending;
+        
+        let isVisible = true;
+        
+        switch (statusFilter) {
+          case 'pending':
+            isVisible = pending > 0;
+            break;
+          case 'prepaid':
+            isVisible = prepay > 0;
+            break;
+          case 'balanced':
+            isVisible = Math.abs(netBalance) < 0.01; // Essentially zero
+            break;
+          default:
+            isVisible = true;
+        }
+        
+        row.style.display = isVisible ? '' : 'none';
+      });
+    };
+
+    const setupFilterListeners = () => {
+      document.getElementById('monthFilter').addEventListener('change', applyAttendanceFilters);
+      document.getElementById('yearFilter').addEventListener('change', applyAttendanceFilters);
+      document.getElementById('locationFilter').addEventListener('change', applyAttendanceFilters);
+      document.getElementById('fromDate').addEventListener('change', applyAttendanceFilters);
+      document.getElementById('toDate').addEventListener('change', applyAttendanceFilters);
+      document.getElementById('paymentStatusFilter').addEventListener('change', applyPaymentFilters);
+    };
+
+    const initializeApp = async () => {
+      try {
+        // Show loading state
+        document.getElementById('loadingState').style.display = 'block';
+        
+        // Fetch data from the correct sheet names
+        const [summaryRaw, attendanceRaw] = await Promise.all([
+          fetchData("Summary Sheet"),
+          fetchData("PivotAttendance")
+        ]);
+        
+        // Process data
+        summaryData = summaryRaw.slice(1); // Remove header
+        attendanceData = attendanceRaw.slice(1); // Remove header
+        allNames = [...new Set(summaryData.map(row => row[1]))].filter(Boolean).sort();
+        
+        // Hide loading state
+        document.getElementById('loadingState').style.display = 'none';
+        
+        // Show welcome message
+        showWelcome();
+        
+        // Initialize components
+        setupSearch();
+        initializeFilters();
+        setupFilterListeners();
+        
+        console.log('App initialized successfully');
+        console.log(`Loaded ${summaryData.length} payment records and ${attendanceData.length} attendance records`);
+        
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        document.getElementById('loadingState').innerHTML = `
+          <div style="color: #c62828; text-align: center; padding: 40px;">
+            <div style="font-size: 1.2rem; margin-bottom: 10px;">⚠️ Error Loading Data</div>
+            <div>Please check your internet connection and try refreshing the page.</div>
+          </div>
+        `;
+      }
+    };
+
+    // Initialize the app when the page loads
+    document.addEventListener('DOMContentLoaded', initializeApp);
+  </script>
 </body>
 </html>
