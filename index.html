@@ -516,6 +516,18 @@
         padding: 6px 4px;
       }
     }
+	
+	tfoot {
+	  background: #f8f9fa;
+	  border-top: 2px solid #dee2e6;
+	  font-weight: bold;
+	}
+
+	tfoot td {
+	  padding: 15px 12px;
+	  border-bottom: none;
+	  color: #495057;
+	}
   </style>
 </head>
 <body>
@@ -682,6 +694,8 @@
             <tbody id="attendanceTable"></tbody>
           </table>
         </div>
+		
+		
         <div id="noAttendanceData" class="no-data" style="display: none;">
           No attendance records found for the selected filters.
         </div>
@@ -707,17 +721,25 @@
         </div>
 
         <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th class="sortable" data-column="0">Name</th>
-                <th class="sortable" data-column="1">Pending</th>
-                <th class="sortable" data-column="2">Prepay Balance</th>
-                <th class="sortable" data-column="3">Total Payment</th>
-              </tr>
-            </thead>
-            <tbody id="allPaymentsTable"></tbody>
-          </table>
+			<table>
+			  <thead>
+				<tr>
+				  <th class="sortable" data-column="0">Name</th>
+				  <th class="sortable" data-column="1">Pending</th>
+				  <th class="sortable" data-column="2">Prepay Balance</th>
+				  <th class="sortable" data-column="3">Total Payment</th>
+				</tr>
+			  </thead>
+			  <tbody id="allPaymentsTable"></tbody>
+			  <tfoot>
+				<tr>
+				  <td>TOTAL</td>
+				  <td id="totalPendingSum">0 MVR</td>
+				  <td id="totalPrepaySum">0 MVR</td>
+				  <td id="totalPaymentSum">0 MVR</td>
+				</tr>
+			  </tfoot>
+			</table>
         </div>
       </div>
     </div>
@@ -1043,53 +1065,65 @@
       setupTableSorting();
     };
 
-    const populateAllPaymentsTable = () => {
-      const tbody = document.getElementById('allPaymentsTable');
-      tbody.innerHTML = '';
-      
-      summaryData.forEach(row => {
-        const tr = document.createElement('tr');
-        
-        // Name
-        const nameCell = document.createElement('td');
-        nameCell.textContent = row[1] || '';
-        tr.appendChild(nameCell);
-        
-        // Pending
-        const pendingCell = document.createElement('td');
-        const pending = parseFloat(row[2]) || 0;
-        pendingCell.textContent = formatCurrency(pending);
-        if (pending > 0) {
-          pendingCell.style.color = '#c62828';
-          pendingCell.style.fontWeight = 'bold';
-        }
-        tr.appendChild(pendingCell);
-        
-        // Prepay
-        const prepayCell = document.createElement('td');
-        const prepay = parseFloat(row[3]) || 0;
-        prepayCell.textContent = formatCurrency(prepay);
-        if (prepay > 0) {
-          prepayCell.style.color = '#2e7d32';
-          prepayCell.style.fontWeight = 'bold';
-        }
-        tr.appendChild(prepayCell);
-        
-        // Total Payment
-        const totalPaymentCell = document.createElement('td');
-        const totalPayment = parseFloat(row[4]) || 0; // Column 4 is Total Payment
-        totalPaymentCell.textContent = formatCurrency(totalPayment);
-        totalPaymentCell.style.fontWeight = 'bold';
-        totalPaymentCell.style.color = totalPayment > 0 ? '#2e7d32' : '#374151';
-        tr.appendChild(totalPaymentCell);
-        
-        tbody.appendChild(tr);
-      });
-      
-      applyPaymentFilters();
-      setupTableSorting();
-    };
-
+	const populateAllPaymentsTable = () => {
+	  const tbody = document.getElementById('allPaymentsTable');
+	  tbody.innerHTML = '';
+	  
+	  let totalPending = 0;
+	  let totalPrepay = 0;
+	  let totalPaymentSum = 0;
+	  
+	  summaryData.forEach(row => {
+		const tr = document.createElement('tr');
+		
+		// Name
+		const nameCell = document.createElement('td');
+		nameCell.textContent = row[1] || '';
+		tr.appendChild(nameCell);
+		
+		// Pending
+		const pendingCell = document.createElement('td');
+		const pending = parseFloat(row[2]) || 0;
+		totalPending += pending;
+		pendingCell.textContent = formatCurrency(pending);
+		if (pending > 0) {
+		  pendingCell.style.color = '#c62828';
+		  pendingCell.style.fontWeight = 'bold';
+		}
+		tr.appendChild(pendingCell);
+		
+		// Prepay
+		const prepayCell = document.createElement('td');
+		const prepay = parseFloat(row[3]) || 0;
+		totalPrepay += prepay;
+		prepayCell.textContent = formatCurrency(prepay);
+		if (prepay > 0) {
+		  prepayCell.style.color = '#2e7d32';
+		  prepayCell.style.fontWeight = 'bold';
+		}
+		tr.appendChild(prepayCell);
+		
+		// Total Payment
+		const totalPaymentCell = document.createElement('td');
+		const totalPayment = parseFloat(row[4]) || 0;
+		totalPaymentSum += totalPayment;
+		totalPaymentCell.textContent = formatCurrency(totalPayment);
+		totalPaymentCell.style.fontWeight = 'bold';
+		totalPaymentCell.style.color = totalPayment > 0 ? '#2e7d32' : '#374151';
+		tr.appendChild(totalPaymentCell);
+		
+		tbody.appendChild(tr);
+	  });
+	  
+	  // Update footer totals
+	  document.getElementById('totalPendingSum').textContent = formatCurrency(totalPending);
+	  document.getElementById('totalPrepaySum').textContent = formatCurrency(totalPrepay);
+	  document.getElementById('totalPaymentSum').textContent = formatCurrency(totalPaymentSum);
+	  
+	  applyPaymentFilters();
+	  setupTableSorting();
+	};
+	
     const applyAttendanceFilters = () => {
       const monthFilter = document.getElementById('monthFilter').value;
       const yearFilter = document.getElementById('yearFilter').value;
