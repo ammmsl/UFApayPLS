@@ -784,7 +784,7 @@
 	};
 
     const formatCurrency = (amount) => {
-      return amount ? `${Math.abs(parseFloat(amount)).toFixed(0)} MVR` : '0 MVR';
+		return amount ? `${Math.abs(parseFloat(amount)).toFixed(2)} MVR` : '0.00 MVR';
     };
 
     const parseDate = (dateStr) => {
