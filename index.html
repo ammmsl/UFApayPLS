@@ -728,6 +728,7 @@
 				  <th class="sortable" data-column="1">Pending</th>
 				  <th class="sortable" data-column="2">Prepay Balance</th>
 				  <th class="sortable" data-column="3">Total Payment</th>
+				  <th class="sortable" data-column="4">Last Covered Date</th>
 				  <th>Action</th>
 				</tr>
 			  </thead>
@@ -738,6 +739,7 @@
 				  <td id="totalPendingSum">0 MVR</td>
 				  <td id="totalPrepaySum">0 MVR</td>
 				  <td id="totalPaymentSum">0 MVR</td>
+				  <td></td>
 				  <td></td>
 				</tr>
 			  </tfoot>
@@ -839,34 +841,38 @@
           });
           header.classList.add(currentSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
           
-          // Sort rows
-          rows.sort((a, b) => {
-            let aVal = a.cells[column]?.textContent?.trim() || '';
-            let bVal = b.cells[column]?.textContent?.trim() || '';
-            
-            // Handle different data types
-            if (column === 0) { // Date column
-              aVal = parseDate(aVal) || new Date(0);
-              bVal = parseDate(bVal) || new Date(0);
-            } else if (column === 3) { // Cost column - extract numeric value
-              aVal = parseCostFromString(aVal);
-              bVal = parseCostFromString(bVal);
-            } else if (aVal.includes('MVR') || bVal.includes('MVR')) { // Currency columns
-              aVal = parseCostFromString(aVal);
-              bVal = parseCostFromString(bVal);
-            }
-            
-            if (typeof aVal === 'number' && typeof bVal === 'number') {
-              return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-            } else if (aVal instanceof Date && bVal instanceof Date) {
-              return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-            } else {
-              // String comparison
-              aVal = aVal.toString().toLowerCase();
-              bVal = bVal.toString().toLowerCase();
-              return currentSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-            }
-          });
+			// Sort rows
+			rows.sort((a, b) => {
+			  let aVal = a.cells[column]?.textContent?.trim() || '';
+			  let bVal = b.cells[column]?.textContent?.trim() || '';
+			  
+			  // Handle different data types
+			  if (column === 0 || column === 4) { // Date columns (updated to include column 4)
+				// Handle empty/missing dates
+				if (aVal === '-' || aVal === '') aVal = new Date(0);
+				else aVal = parseDate(aVal) || new Date(0);
+				
+				if (bVal === '-' || bVal === '') bVal = new Date(0);
+				else bVal = parseDate(bVal) || new Date(0);
+			  } else if (column === 3) { // Cost column - extract numeric value
+				aVal = parseCostFromString(aVal);
+				bVal = parseCostFromString(bVal);
+			  } else if (aVal.includes('MVR') || bVal.includes('MVR')) { // Currency columns
+				aVal = parseCostFromString(aVal);
+				bVal = parseCostFromString(bVal);
+			  }
+			  
+			  if (typeof aVal === 'number' && typeof bVal === 'number') {
+				return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+			  } else if (aVal instanceof Date && bVal instanceof Date) {
+				return currentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+			  } else {
+				// String comparison
+				aVal = aVal.toString().toLowerCase();
+				bVal = bVal.toString().toLowerCase();
+				return currentSortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+			  }
+			});
           
           // Re-append sorted rows
           rows.forEach(row => tbody.appendChild(row));
@@ -1145,6 +1151,15 @@
 		totalPaymentCell.style.fontWeight = 'bold';
 		totalPaymentCell.style.color = totalPayment > 0 ? '#2e7d32' : '#374151';
 		tr.appendChild(totalPaymentCell);
+		
+		// Last Covered Date (ADD THIS)
+		const lastCoveredCell = document.createElement('td');
+		lastCoveredCell.textContent = lastCoveredDate || '-';
+		lastCoveredCell.style.fontWeight = '500';
+		if (pending > 0 && lastCoveredDate) {
+		  lastCoveredCell.style.color = '#c62828'; // Highlight in red if pending and has a date
+		}
+		tr.appendChild(lastCoveredCell);
 		
 		// Copy Button (only show if pending > 0)
 		const actionCell = document.createElement('td');
