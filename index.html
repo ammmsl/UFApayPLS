@@ -1098,9 +1098,24 @@
 		const totalPayment = parseFloat(row[4]) || 0;
 		const lastCoveredDate = row[9] || ''; // Column 9: Last Covered Date
 		
-		// Name
+		// Name (clickable to view individual record)
 		const nameCell = document.createElement('td');
-		nameCell.textContent = name;
+		const nameLink = document.createElement('a');
+		nameLink.textContent = name;
+		nameLink.href = '#';
+		nameLink.style.color = '#488daa';
+		nameLink.style.textDecoration = 'none';
+		nameLink.style.fontWeight = '600';
+		nameLink.style.cursor = 'pointer';
+		nameLink.style.transition = 'color 0.2s ease';
+		nameLink.onmouseover = () => nameLink.style.color = '#357a96';
+		nameLink.onmouseout = () => nameLink.style.color = '#488daa';
+		nameLink.onclick = (e) => {
+		  e.preventDefault();
+		  selectUser(name);
+		  window.scrollTo({ top: 0, behavior: 'smooth' });
+		};
+		nameCell.appendChild(nameLink);
 		tr.appendChild(nameCell);
 		
 		// Pending
