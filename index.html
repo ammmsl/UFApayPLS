@@ -728,6 +728,7 @@
 				  <th class="sortable" data-column="1">Pending</th>
 				  <th class="sortable" data-column="2">Prepay Balance</th>
 				  <th class="sortable" data-column="3">Total Payment</th>
+				  <th>Action</th>
 				</tr>
 			  </thead>
 			  <tbody id="allPaymentsTable"></tbody>
@@ -737,6 +738,7 @@
 				  <td id="totalPendingSum">0 MVR</td>
 				  <td id="totalPrepaySum">0 MVR</td>
 				  <td id="totalPaymentSum">0 MVR</td>
+				  <td></td>
 				</tr>
 			  </tfoot>
 			</table>
@@ -1090,14 +1092,19 @@
 	  summaryData.forEach(row => {
 		const tr = document.createElement('tr');
 		
+		const name = row[1] || '';
+		const pending = parseFloat(row[2]) || 0;
+		const prepay = parseFloat(row[3]) || 0;
+		const totalPayment = parseFloat(row[4]) || 0;
+		const lastCoveredDate = row[9] || ''; // Column 9: Last Covered Date
+		
 		// Name
 		const nameCell = document.createElement('td');
-		nameCell.textContent = row[1] || '';
+		nameCell.textContent = name;
 		tr.appendChild(nameCell);
 		
 		// Pending
 		const pendingCell = document.createElement('td');
-		const pending = parseFloat(row[2]) || 0;
 		totalPending += pending;
 		pendingCell.textContent = formatCurrency(pending);
 		if (pending > 0) {
@@ -1108,7 +1115,6 @@
 		
 		// Prepay
 		const prepayCell = document.createElement('td');
-		const prepay = parseFloat(row[3]) || 0;
 		totalPrepay += prepay;
 		prepayCell.textContent = formatCurrency(prepay);
 		if (prepay > 0) {
@@ -1119,12 +1125,24 @@
 		
 		// Total Payment
 		const totalPaymentCell = document.createElement('td');
-		const totalPayment = parseFloat(row[4]) || 0;
 		totalPaymentSum += totalPayment;
 		totalPaymentCell.textContent = formatCurrency(totalPayment);
 		totalPaymentCell.style.fontWeight = 'bold';
 		totalPaymentCell.style.color = totalPayment > 0 ? '#2e7d32' : '#374151';
 		tr.appendChild(totalPaymentCell);
+		
+		// Copy Button (only show if pending > 0)
+		const actionCell = document.createElement('td');
+		if (pending > 0) {
+		  const copyBtn = document.createElement('button');
+		  copyBtn.className = 'btn btn-primary';
+		  copyBtn.textContent = '📋 Copy';
+		  copyBtn.style.padding = '8px 15px';
+		  copyBtn.style.fontSize = '12px';
+		  copyBtn.onclick = () => copyPaymentMessage(name, pending, lastCoveredDate, copyBtn);
+		  actionCell.appendChild(copyBtn);
+		}
+		tr.appendChild(actionCell);
 		
 		tbody.appendChild(tr);
 	  });
@@ -1136,6 +1154,63 @@
 	  
 	  applyPaymentFilters();
 	  setupTableSorting();
+	};	
+	
+	const copyPaymentMessage = async (name, amount, lastCoveredDate, buttonElement) => {
+	  const message = `Hey ${name}, you have an unpaid field booking fee of MVR ${amount.toFixed(2)} since ${lastCoveredDate || 'your last session'}.
+
+You can view the session cost details at https://ammmsl.github.io/UFApayPLS/ 
+
+Please pay to the following account:
+Account No.: 7730000682000
+Account Name: MOHD. AMSAL`;
+
+	  try {
+		await navigator.clipboard.writeText(message);
+		// Show success feedback by changing button temporarily
+		const originalText = buttonElement.textContent;
+		const originalBg = buttonElement.style.background;
+		buttonElement.textContent = '✓ Copied!';
+		buttonElement.style.background = '#2e7d32';
+		buttonElement.disabled = true;
+		
+		setTimeout(() => {
+		  buttonElement.textContent = originalText;
+		  buttonElement.style.background = originalBg;
+		  buttonElement.disabled = false;
+		}, 2000);
+	  } catch (err) {
+		// Fallback for older browsers
+		const textArea = document.createElement('textarea');
+		textArea.value = message;
+		textArea.style.position = 'fixed';
+		textArea.style.left = '-999999px';
+		document.body.appendChild(textArea);
+		textArea.select();
+		try {
+		  document.execCommand('copy');
+		  // Same visual feedback for fallback
+		  const originalText = buttonElement.textContent;
+		  const originalBg = buttonElement.style.background;
+		  buttonElement.textContent = '✓ Copied!';
+		  buttonElement.style.background = '#2e7d32';
+		  buttonElement.disabled = true;
+		  
+		  setTimeout(() => {
+			buttonElement.textContent = originalText;
+			buttonElement.style.background = originalBg;
+			buttonElement.disabled = false;
+		  }, 2000);
+		} catch (err) {
+		  buttonElement.textContent = '✗ Failed';
+		  buttonElement.style.background = '#c62828';
+		  setTimeout(() => {
+			buttonElement.textContent = '📋 Copy';
+			buttonElement.style.background = '';
+		  }, 2000);
+		}
+		document.body.removeChild(textArea);
+	  }
 	};
 	
     const applyAttendanceFilters = () => {
