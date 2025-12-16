@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>UFA Central - Payment Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     /* CSS optimized for dynamic rendering */
     * { box-sizing: border-box; }
@@ -154,11 +155,23 @@
         </div>
 
         <div class="card">
-          <div class="card-title">📊 Activity Overview</div>
-          <div class="summary-grid">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <div class="card-title" style="margin: 0;">📊 Activity Overview</div>
+              <select id="chartYearFilter" style="padding: 8px; border-radius: 8px; border: 1px solid #e1e5e9; font-size: 0.9rem; background: #f8f9fa;">
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+              </select>
+          </div>
+          
+          <div class="summary-grid" style="margin-bottom: 25px;">
             <div class="summary-item neutral"><div class="summary-value" id="sessions2024">0</div><div class="summary-label">2024 Sessions</div></div>
             <div class="summary-item neutral"><div class="summary-value" id="sessions2025">0</div><div class="summary-label">2025 Sessions</div></div>
             <div class="summary-item neutral"><div class="summary-value" id="recentSessions">0</div><div class="summary-label">Last 30 Days</div></div>
+          </div>
+
+          <div style="position: relative; height: 250px; width: 100%;">
+              <canvas id="activityChart"></canvas>
           </div>
         </div>
       </div>
@@ -291,6 +304,8 @@
         sortBy: null,
         sortAsc: true
     };
+    
+    let chartInstance = null; // Chart instance holder
 
     const fmtMoney = (amt) => `${Math.abs(parseFloat(amt) || 0).toFixed(2)} MVR`;
     const parseMoney = (str) => parseFloat(String(str).replace(/[^\d.-]/g, '')) || 0;
@@ -367,9 +382,7 @@
             $('#lastPaymentAmount').text(summaryRow[8] ? fmtMoney(parseMoney(summaryRow[8])) : '-');
             $('#lastCoveredDate').text(summaryRow[9] || '-');
 
-            // --- REVISED QR LOGIC ---
-            // 1. Image on left (clickable to open modal)
-            // 2. Text on right (Same paragraph block)
+            // --- QR LOGIC: Image Left, Text Right ---
             if (pending > 0) {
                 $('#pendingActionArea').html(`
                     <div style="background: #fff0f0; padding: 15px; border-radius: 12px; border: 1px solid #ffcdd2; display: flex; align-items: center; justify-content: center; gap: 20px;">
@@ -391,6 +404,7 @@
             }
         }
 
+        // Stats
         const paidSessions = attRows.filter(r => parseMoney(r[4]) > 0);
         const totalCost = paidSessions.reduce((acc, r) => acc + parseMoney(r[4]), 0);
         const avg = paidSessions.length ? totalCost / paidSessions.length : 0;
@@ -404,6 +418,67 @@
         $('#recentSessions').text(attRows.filter(r => parseDate(r[3]) >= thirtyDaysAgo).length);
 
         renderAttendanceTable(attRows);
+        
+        // --- Render Activity Chart ---
+        renderActivityChart(attRows);
+    }
+
+    // --- Chart.js Rendering ---
+    function renderActivityChart(rows) {
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        const selectedYear = $('#chartYearFilter').val();
+        
+        // 1. Initialize buckets
+        const stats = Array.from({length: 12}, () => ({ count: 0, totalCost: 0 }));
+        
+        // 2. Aggregate Data
+        rows.forEach(r => {
+            const date = parseDate(r[3]); 
+            if (date && date.getFullYear().toString() === selectedYear) {
+                const monthIdx = date.getMonth(); 
+                stats[monthIdx].count++;
+                stats[monthIdx].totalCost += parseMoney(r[4]); 
+            }
+        });
+
+        const counts = stats.map(s => s.count);
+        const avgCosts = stats.map(s => s.count ? (s.totalCost / s.count).toFixed(2) : 0);
+
+        if (chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Sessions',
+                    data: counts,
+                    backgroundColor: 'rgba(72, 141, 170, 0.6)',
+                    borderColor: 'rgba(72, 141, 170, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    hoverBackgroundColor: 'rgba(72, 141, 170, 0.8)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const idx = context.dataIndex;
+                                return [` Sessions: ${context.raw}`, ` Avg Cost: ${avgCosts[idx]} MVR`];
+                            }
+                        }
+                    },
+                    legend: { display: false }
+                }
+            }
+        });
     }
 
     function renderAttendanceTable(data) {
@@ -549,7 +624,7 @@
             const btn = e.target;
             const { name, amt, date } = btn.dataset;
             const link = `${window.location.origin}${window.location.pathname}?user=${encodeURIComponent(name)}`;
-            const msg = `Hey ${name}, you have unpaid Frisbee field booking fees of MVR ${parseFloat(amt).toFixed(2)} MVR pending since ${date || 'your last session'}.\nDetails: ${link}\n\nPay to: 7730000682000 (MOHD. AMSAL)`;
+            const msg = `Hey ${name}, unpaid fees of ${parseFloat(amt).toFixed(2)} MVR pending since ${date || 'your last session'}.\nDetails: ${link}\n\nPay to: 7730000682000 (MOHD. AMSAL)`;
             
             try {
                 await navigator.clipboard.writeText(msg);
@@ -594,6 +669,14 @@
 
         $('.att-filter').on('change', () => {
              renderAttendanceTable(state.attendance.filter(r => r[0] === state.currentUser));
+        });
+        
+        // Chart Year Filter Listener
+        $('#chartYearFilter').on('change', () => {
+            if (state.currentUser) {
+                const userRows = state.attendance.filter(r => r[0] === state.currentUser);
+                renderActivityChart(userRows);
+            }
         });
 
         $('#paymentStatusFilter').on('change', renderAllPayments);
