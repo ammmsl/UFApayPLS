@@ -624,7 +624,7 @@
             const btn = e.target;
             const { name, amt, date } = btn.dataset;
             const link = `${window.location.origin}${window.location.pathname}?user=${encodeURIComponent(name)}`;
-            const msg = `Hey ${name}, unpaid fees of ${parseFloat(amt).toFixed(2)} MVR pending since ${date || 'your last session'}.\nDetails: ${link}\n\nPay to: 7730000682000 (MOHD. AMSAL)`;
+            const msg = `Hey ${name}, you have unpaid Frisbee field booking fees of ${parseFloat(amt).toFixed(2)} MVR pending since ${date || 'your last session'}.\nYou can view the session cost details at: ${link}\n\n Please pay to the following account: 7730000682000 (MOHD. AMSAL)`;
             
             try {
                 await navigator.clipboard.writeText(msg);
