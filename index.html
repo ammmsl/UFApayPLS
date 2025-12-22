@@ -510,7 +510,7 @@
                 <td>${r[3]}</td>
                 <td>${r[1]}</td>
                 <td>${r[2]}</td>
-                <td>${fmtMoney(r[4])}</td>
+                <td>${fmtMoney(parseMoney(r[4]))}</td>
                 <td><span class="status-badge ${r[6] === 'Non-Member' ? 'status-non-member' : 'status-member'}">${r[6] || 'Member'}</span></td>
             </tr>
         `).join('') : `<tr><td colspan="5" class="loading">No records found.</td></tr>`;
