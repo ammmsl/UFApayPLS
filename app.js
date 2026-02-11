@@ -97,7 +97,10 @@ function getMembershipBadge(row) {
 // --- Financial Ledger Engine ---
 
 function calculateFinancialLedger(userName) {
-    // Cost events from attendance
+    // Financial tracking started July 1st, 2024 - only include data from then onwards
+    const trackingStartDate = new Date(2024, 6, 1); // July 1, 2024 (month is 0-indexed)
+
+    // Cost events from attendance (only from tracking start date)
     const costEvents = state.attendance
         .filter(r => r[ATT.NAME] === userName)
         .map(r => ({
@@ -108,9 +111,9 @@ function calculateFinancialLedger(userName) {
             type: 'cost',
             amount: parseMoney(r[ATT.COST])
         }))
-        .filter(r => r.date);
+        .filter(r => r.date && r.date >= trackingStartDate); // Filter by tracking start date
 
-    // Payment events from Payments sheet
+    // Payment events from Payments sheet (only from tracking start date)
     const payEvents = (state.payments || [])
         .filter(r => r[PAY.NAME] === userName)
         .map(r => ({
@@ -120,7 +123,7 @@ function calculateFinancialLedger(userName) {
             amount: parseMoney(r[PAY.AMOUNT]),
             reference: r[PAY.REFERENCE] || ''
         }))
-        .filter(r => r.date && r.amount > 0);
+        .filter(r => r.date && r.amount > 0 && r.date >= trackingStartDate); // Filter by tracking start date
 
     // Unified timeline sorted by date
     const timeline = [...costEvents, ...payEvents].sort((a, b) => a.date - b.date);
@@ -269,7 +272,7 @@ function populateFilters() {
     $('#monthFilter').html(`<option value="all">All Months</option>${monthOpts}`);
     $('#locationFilter').html(`<option value="all">All Locations</option>${locOpts}`);
     $('#yearFilter').html(`<option value="all">All Years</option>${yearOpts}`);
-    $('#chartYearFilter').html(yearOpts);
+    // chartYearFilter removed - now using year buttons instead
 }
 
 // --- User Dashboard ---
@@ -326,18 +329,44 @@ function renderUserDashboard(userName) {
     $('#totalSessions').text(attRows.length);
     $('#avgCost').text(Math.round(avg) + ' MVR');
 
-    // Year session cards for Activity tab
+    // Year session cards for Activity tab - only show years with sessions
     const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const recentCount = attRows.filter(r => parseDate(r[ATT.DATE]) >= thirtyDaysAgo).length;
 
-    const yearCards = (state.years || []).map(y => {
+    // Calculate sessions per year and filter out years with 0 sessions
+    const yearData = (state.years || []).map(y => {
         const count = attRows.filter(r => { const d = parseDate(r[ATT.DATE]); return d && d.getFullYear().toString() === y; }).length;
-        return `<div class="summary-item neutral"><div class="summary-value">${count}</div><div class="summary-label">${y} Sessions</div></div>`;
-    }).join('');
+        return { year: y, count };
+    }).filter(item => item.count > 0); // Only include years with sessions
+
+    const yearCards = yearData.map(item =>
+        `<div class="summary-item neutral"><div class="summary-value">${item.count}</div><div class="summary-label">${item.year} Sessions</div></div>`
+    ).join('');
 
     $('#yearSessionCards').html(
         yearCards + `<div class="summary-item neutral"><div class="summary-value">${recentCount}</div><div class="summary-label">Last 30 Days</div></div>`
     );
+
+    // Generate year buttons (only for years with sessions)
+    if (yearData.length > 0) {
+        const firstYear = yearData[0].year; // Default to first available year
+        const yearButtons = yearData.map(item =>
+            `<button class="year-btn${item.year === firstYear ? ' active' : ''}" data-year="${item.year}">${item.year}</button>`
+        ).join('');
+        $('#chartYearButtons').html(yearButtons);
+
+        // Set up click events for year buttons
+        document.querySelectorAll('.year-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                if (state.currentUser) {
+                    const userRows = state.attendance.filter(r => r[ATT.NAME] === state.currentUser);
+                    renderActivityChart(userRows);
+                }
+            });
+        });
+    }
 
     // Financial ledger + health badge
     const ledger = calculateFinancialLedger(userName);
@@ -361,14 +390,36 @@ function renderFinancialChart(ledger) {
 
     if (financialChartInstance) financialChartInstance.destroy();
 
+    // Don't show chart if no data or if both totals are 0
     if (ledger.timeline.length === 0) {
         ctx.canvas.parentElement.innerHTML = '<div class="loading">No session data to chart.</div>';
+        return;
+    }
+
+    const finalCost = ledger.cumulativeCost || 0;
+    const finalPaid = ledger.cumulativePaid || 0;
+
+    if (finalCost === 0 && finalPaid === 0) {
+        ctx.canvas.parentElement.innerHTML = '<div class="loading">No financial activity yet.</div>';
         return;
     }
 
     const labels = ledger.timeline.map(e => fmtDateShort(e.date));
     const cumCosts = ledger.timeline.map(e => e.cumulativeCost);
     const cumPaids = ledger.timeline.map(e => e.cumulativePaid);
+
+    // Create arrays for point styling - make payment events more visible
+    const costPointStyles = ledger.timeline.map(e => e.type === 'payment' ? 'rectRot' : 'circle');
+    const costPointRadii = ledger.timeline.map(e => e.type === 'payment' ? 6 : 2);
+    const costPointColors = ledger.timeline.map(e =>
+        e.type === 'payment' ? 'rgb(76, 175, 80)' : 'rgb(239, 83, 80)'
+    );
+
+    const paidPointStyles = ledger.timeline.map(e => e.type === 'payment' ? 'star' : 'circle');
+    const paidPointRadii = ledger.timeline.map(e => e.type === 'payment' ? 7 : 2);
+    const paidPointColors = ledger.timeline.map(e =>
+        e.type === 'payment' ? 'rgb(46, 125, 50)' : 'rgb(76, 175, 80)'
+    );
 
     financialChartInstance = new Chart(ctx, {
         type: 'line',
@@ -382,8 +433,11 @@ function renderFinancialChart(ledger) {
                     borderColor: 'rgb(239, 83, 80)',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
-                    pointRadius: 1.5,
-                    pointHoverRadius: 4,
+                    pointStyle: costPointStyles,
+                    pointRadius: costPointRadii,
+                    pointBackgroundColor: costPointColors,
+                    pointBorderColor: costPointColors,
+                    pointHoverRadius: 8,
                     fill: {
                         target: 1,
                         above: 'rgba(239, 83, 80, 0.12)',
@@ -397,8 +451,11 @@ function renderFinancialChart(ledger) {
                     borderColor: 'rgb(76, 175, 80)',
                     backgroundColor: 'transparent',
                     borderWidth: 2,
-                    pointRadius: 1.5,
-                    pointHoverRadius: 4,
+                    pointStyle: paidPointStyles,
+                    pointRadius: paidPointRadii,
+                    pointBackgroundColor: paidPointColors,
+                    pointBorderColor: paidPointColors,
+                    pointHoverRadius: 8,
                     fill: false
                 }
             ]
@@ -409,11 +466,19 @@ function renderFinancialChart(ledger) {
             interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
-                    ticks: { autoSkip: true, maxRotation: 45, font: { size: 10 } }
+                    ticks: {
+                        autoSkip: true,
+                        maxRotation: 45,
+                        minRotation: 0,
+                        font: { size: 9 } // Smaller for mobile
+                    }
                 },
                 y: {
                     beginAtZero: true,
-                    ticks: { callback: function(value) { return value + ' MVR'; } }
+                    ticks: {
+                        callback: function(value) { return value + ' MVR'; },
+                        font: { size: 10 }
+                    }
                 }
             },
             plugins: {
@@ -423,7 +488,7 @@ function renderFinancialChart(ledger) {
                             const idx = items[0].dataIndex;
                             const e = ledger.timeline[idx];
                             if (e.type === 'cost') return `${e.dateStr} — ${e.location}`;
-                            return `${e.dateStr} — Payment`;
+                            return `💰 ${e.dateStr} — Payment`;
                         },
                         afterBody: function(items) {
                             const idx = items[0].dataIndex;
@@ -433,7 +498,15 @@ function renderFinancialChart(ledger) {
                         }
                     }
                 },
-                legend: { display: true, position: 'top' },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: { size: 11 }, // Smaller for mobile
+                        padding: 10,
+                        usePointStyle: true
+                    }
+                },
                 filler: { propagate: true }
             }
         }
@@ -444,7 +517,7 @@ function renderFinancialChart(ledger) {
 
 function renderActivityChart(attRows) {
     const ctx = document.getElementById('activityChart').getContext('2d');
-    const selectedYear = $('#chartYearFilter').val();
+    const selectedYear = document.querySelector('.year-btn.active')?.dataset.year || new Date().getFullYear().toString();
 
     const stats = Array.from({length: 12}, () => ({ count: 0, totalCost: 0 }));
 
@@ -574,6 +647,12 @@ function renderAttendanceTable(data) {
     });
 
     const sort = state.attendanceSort;
+    // Default sort: most recent first (if no sort applied yet)
+    if (!sort.col) {
+        sort.col = 'date';
+        sort.asc = false; // Descending (most recent first)
+    }
+
     if (sort.col) {
         rows.sort((a, b) => {
             let valA, valB;
@@ -776,13 +855,7 @@ function setupEventListeners() {
         }
     });
 
-    // Activity chart year filter
-    $('#chartYearFilter').on('change', () => {
-        if (state.currentUser) {
-            const userRows = state.attendance.filter(r => r[ATT.NAME] === state.currentUser);
-            renderActivityChart(userRows);
-        }
-    });
+    // Year filter now handled by year button clicks (see renderUserDashboard)
 
     $('#paymentStatusFilter').on('change', renderAllPayments);
     $('#neverPaidToggle').on('change', renderAllPayments);
