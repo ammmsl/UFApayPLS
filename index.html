@@ -21,7 +21,7 @@
       <div class="search-container">
         <input type="text" id="nameSearch" class="search-input" placeholder="Start typing your name...">
         <button id="clearSearch" class="btn btn-secondary">Clear</button>
-        <button id="showAllData" class="btn btn-secondary">View All Data</button>
+        <button id="showAdminPanel" class="btn btn-secondary">Admin Panel</button>
       </div>
       <div id="searchSuggestions" style="display: none; margin-top: 10px;">
         <div style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">Select your name:</div>
@@ -140,9 +140,171 @@
       </div>
     </div>
 
-    <div id="allDataView" style="display: none;">
+    <div id="adminPanel" style="display: none;">
+      <div class="card" style="background: linear-gradient(135deg, #488daa, #357a96); color: white; text-align: center;">
+        <h2 style="margin: 0; font-size: 1.8rem;">⚙️ Admin Control Panel</h2>
+        <p style="margin: 10px 0 0 0; opacity: 0.9;">Financial Health & Player Management Dashboard</p>
+      </div>
+
+      <!-- Dashboard Metrics -->
+      <div class="admin-dashboard">
+        <!-- Top Row: Financial Health Tiles -->
+        <div class="admin-row admin-row-top">
+          <div class="admin-tile admin-tile-red has-tooltip" data-tooltip="Sum of all pending payments across all players. Money owed to the association for attended sessions that haven't been paid yet.">
+            <div class="admin-tile-label">Total Outstanding</div>
+            <div class="admin-tile-value" id="adminTotalPending">0 MVR</div>
+            <div class="admin-tile-sublabel">Debt Pool</div>
+          </div>
+          <div class="admin-tile admin-tile-green has-tooltip" data-tooltip="Sum of all prepaid balances. Money paid in advance for sessions not yet attended. Represents liability to deliver future sessions.">
+            <div class="admin-tile-label">Total Prepaid</div>
+            <div class="admin-tile-value" id="adminTotalPrepaid">0 MVR</div>
+            <div class="admin-tile-sublabel">Prepaid Liability</div>
+          </div>
+          <div class="admin-tile admin-tile-blue has-tooltip" data-tooltip="Number of unique players who attended at least one session in the last 30 days. Indicates current active community size.">
+            <div class="admin-tile-label">Active Players</div>
+            <div class="admin-tile-value" id="adminActivePlayers">0</div>
+            <div class="admin-tile-sublabel">Last 30 Days</div>
+          </div>
+          <div class="admin-tile admin-tile-purple has-tooltip" data-tooltip="Surcharges collected from paid sessions only. This covers equipment wear and tear, not field booking costs.">
+            <div class="admin-tile-label">Collected Profit</div>
+            <div class="admin-tile-value" id="adminTotalProfit">0 MVR</div>
+            <div class="admin-tile-sublabel">From Paid Sessions</div>
+          </div>
+        </div>
+
+        <!-- Middle Row: Charts & Top Debtors -->
+        <div class="admin-row admin-row-middle">
+          <div class="admin-tile-large">
+            <!-- Chart Tabs -->
+            <div class="admin-chart-tabs">
+              <button class="admin-chart-tab active" data-chart="revenue">📈 Revenue & Attendance</button>
+              <button class="admin-chart-tab" data-chart="velocity">⚡ Payment Velocity</button>
+              <button class="admin-chart-tab" data-chart="retention">🔄 Retention Rate</button>
+            </div>
+
+            <!-- Chart Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+              <div class="filter-group" style="flex: 1; min-width: 150px;">
+                <label class="filter-label" style="font-size: 0.75rem;">Time Period</label>
+                <select id="revenueTimePeriod" class="chart-filter">
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90" selected>Last 3 Months</option>
+                  <option value="180">Last 6 Months</option>
+                  <option value="365">Last Year</option>
+                  <option value="all">All Time</option>
+                </select>
+              </div>
+              <div class="filter-group" style="flex: 1; min-width: 150px;">
+                <label class="filter-label" style="font-size: 0.75rem;">Grouping</label>
+                <select id="revenueBinning" class="chart-filter">
+                  <option value="daily">Daily</option>
+                  <option value="weekly" selected>Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Chart Containers -->
+            <div class="admin-chart-container active" id="revenueChartContainer" style="position: relative; height: 280px; width: 100%;">
+              <canvas id="adminRevenueChart"></canvas>
+            </div>
+            <div class="admin-chart-container" id="velocityChartContainer" style="position: relative; height: 280px; width: 100%; display: none;">
+              <canvas id="adminVelocityChart"></canvas>
+            </div>
+            <div class="admin-chart-container" id="retentionChartContainer" style="position: relative; height: 280px; width: 100%; display: none;">
+              <canvas id="adminRetentionChart"></canvas>
+            </div>
+          </div>
+          <div class="admin-tile-large">
+            <div class="tab-header">
+              <button class="tab-btn active" data-tab="topDebtors">🎯 Top Debtors</button>
+              <button class="tab-btn" data-tab="yearlyData">📊 Yearly Data</button>
+            </div>
+
+            <!-- Tab: Top 10 Debtors -->
+            <div id="tabTopDebtors" class="tab-content active">
+              <div id="adminTopDebtors" class="top-debtors-list"></div>
+            </div>
+
+            <!-- Tab: Yearly Financial Data -->
+            <div id="tabYearlyData" class="tab-content">
+              <div class="filters" style="margin-bottom: 15px; padding: 15px; gap: 10px;">
+                <div class="filter-group">
+                  <label class="filter-label">Year Filter</label>
+                  <select id="yearRangeFilter" class="filter-select">
+                    <option value="all">All Years</option>
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                    <option value="2022">2022</option>
+                  </select>
+                </div>
+              </div>
+              <div id="adminYearlyDataTable" class="yearly-data-table"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Additional Metrics Row -->
+        <div class="admin-row admin-row-metrics">
+          <div class="admin-metric-card has-tooltip" data-tooltip="Available cash for operations. Calculated as: All player payments received (Prepay + PostPay + Adjustments) minus field costs from Session Input sheet.">
+            <div class="admin-metric-label">Operating Cash</div>
+            <div class="admin-metric-value" id="adminOperatingCash">0 MVR</div>
+            <div class="admin-metric-description">Cash Available</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Total attendance records divided by the number of unique session dates. Helps determine optimal field booking sizes.">
+            <div class="admin-metric-label">Avg Attendance</div>
+            <div class="admin-metric-value" id="adminAvgAttendance">0</div>
+            <div class="admin-metric-description">Per Session</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Average number of days between a player attending a session and making a payment for that session. Lower is better - indicates faster payment collection.">
+            <div class="admin-metric-label">Payment Velocity</div>
+            <div class="admin-metric-value" id="adminPaymentVelocity">0 days</div>
+            <div class="admin-metric-description">Avg Collection Time</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Percentage of players who attended in the last 30 days compared to those who attended in the previous 30 days. Shows player engagement and churn rate.">
+            <div class="admin-metric-label">Retention Rate</div>
+            <div class="admin-metric-value" id="adminRetentionRate">0%</div>
+            <div class="admin-metric-description">Last 30 Days</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Count of players who attended their first ever session this month. Tracks new player acquisition and growth.">
+            <div class="admin-metric-label">New Players</div>
+            <div class="admin-metric-value" id="adminNewPlayers">0</div>
+            <div class="admin-metric-description">This Month</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Percentage change in revenue collected this week compared to last week. Positive values indicate increasing revenue, negative values show declining collections.">
+            <div class="admin-metric-label">Revenue Trend</div>
+            <div class="admin-metric-value" id="adminRevenueTrend">--</div>
+            <div class="admin-metric-description">vs Last Week</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Surcharges from unpaid sessions that we've billed but not collected yet. Represents potential profit if all pending sessions get paid.">
+            <div class="admin-metric-label">Pending Profit</div>
+            <div class="admin-metric-value" id="adminPendingProfit">0 MVR</div>
+            <div class="admin-metric-description">From Unpaid Sessions</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Total profit if all pending sessions get paid. Calculated as: Collected Profit + Pending Profit.">
+            <div class="admin-metric-label">Potential Profit</div>
+            <div class="admin-metric-value" id="adminPotentialProfit">0 MVR</div>
+            <div class="admin-metric-description">If All Paid</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Sum of all player payments (Prepay + PostPay + Adjustments). Excludes historical Field Booking payments which were abandoned after centralization.">
+            <div class="admin-metric-label">Total Revenue</div>
+            <div class="admin-metric-value" id="adminTotalRevenue">0 MVR</div>
+            <div class="admin-metric-description">Player Payments In</div>
+          </div>
+          <div class="admin-metric-card has-tooltip" data-tooltip="Total field booking costs from Session Input sheet. Calculated from actual sessions that happened, not from payment records.">
+            <div class="admin-metric-label">Field Costs</div>
+            <div class="admin-metric-value" id="adminFieldCostsPaid">0 MVR</div>
+            <div class="admin-metric-description">Session Bookings</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Ledger / All Data View -->
       <div class="card">
-        <div class="card-title">📋 All Payment Records</div>
+        <div class="card-title">📋 Master Ledger - All Payment Records</div>
         <div class="filters">
             <div class="filter-group">
                 <label class="filter-label">Filter Status</label>
@@ -158,6 +320,34 @@
                 <div style="height: 21px;"></div> <label style="display: flex; align-items: center; background: white; padding: 10px; border-radius: 12px; border: 2px solid #e1e5e9; cursor: pointer;">
                     <input type="checkbox" id="neverPaidToggle" style="width: auto; margin-right: 8px;">
                     <span style="font-size: 0.9rem; font-weight: 600; color: #495057;">Never Paid Only</span>
+                </label>
+            </div>
+
+            <div class="filter-group" id="coveredYearFilterGroup" style="display: none;">
+                <label class="filter-label">Covered Until Year</label>
+                <select id="coveredYearFilter">
+                  <option value="all">All Years</option>
+                </select>
+            </div>
+
+            <div class="filter-group" id="lastPaymentFilterGroup" style="display: none;">
+                <label class="filter-label">Last Payment Year</label>
+                <select id="lastPaymentYearFilter">
+                  <option value="all">All Years</option>
+                </select>
+            </div>
+
+            <div class="filter-group" id="lastPaymentMonthFilterGroup" style="display: none;">
+                <label class="filter-label">Last Payment Month</label>
+                <select id="lastPaymentMonthFilter">
+                  <option value="all">All Months</option>
+                </select>
+            </div>
+
+            <div class="filter-group" id="oneSessionFilterGroup" style="display: none; justify-content: flex-end;">
+                <div style="height: 21px;"></div> <label style="display: flex; align-items: center; background: white; padding: 10px; border-radius: 12px; border: 2px solid #e1e5e9; cursor: pointer;">
+                    <input type="checkbox" id="oneSessionToggle" style="width: auto; margin-right: 8px;">
+                    <span style="font-size: 0.9rem; font-weight: 600; color: #495057;">One Session Only</span>
                 </label>
             </div>
         </div>
@@ -185,6 +375,20 @@
               </tfoot>
             </table>
         </div>
+      </div>
+    </div>
+    </div>
+
+  <div id="adminPasswordModal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="close-admin-modal">&times;</span>
+      <h3>🔒 Admin Access</h3>
+      <p style="color: #666; font-size: 0.9rem;">Enter the admin password to continue.</p>
+      <input type="password" id="adminPasswordInput" class="search-input" placeholder="Enter password" style="margin: 20px 0; width: 100%;">
+      <div id="adminPasswordError" style="color: #c62828; font-size: 0.9rem; margin-bottom: 10px; display: none;">Incorrect password. Please try again.</div>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="adminPasswordSubmit" class="btn btn-primary">Submit</button>
+        <button class="btn btn-secondary close-admin-modal">Cancel</button>
       </div>
     </div>
   </div>
