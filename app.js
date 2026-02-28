@@ -25,9 +25,25 @@ const $ = (selector) => {
 
 // --- Column index constants ---
 
-const ATT = { NAME: 0, LOCATION: 1, MONTH: 2, DATE: 3, COST: 4, MEMBERSHIP: 6 };
+// NOTE: Actual data structure from PivotAttendance sheet
+// The headers say: "Date Pull, Month, Location, Name, Player ID, Cost Per, Membership, Surcharge"
+// But the actual data appears to be in a different order (likely due to pivot structure)
+// Based on actual data inspection: Name at 0, Location at 1, Month at 2, Date at 3, etc.
+const ATT = {
+    NAME: 0,         // Player Name (confirmed from data: 'Afrah', 'Aikko', etc.)
+    LOCATION: 1,     // Location
+    MONTH: 2,        // Month
+    DATE: 3,         // Session Date (confirmed from data: '05/01/2024', etc.)
+    COST: 4,         // Cost Per
+    PLAYER_ID: 5,    // Player ID
+    MEMBERSHIP: 6,   // Membership status
+    SURCHARGE: 7     // Surcharge (calculated value)
+};
 const SUM = { NAME: 1, PENDING: 2, PREPAY: 3, TOTAL: 4, LAST_PAID_DATE: 7, LAST_PAID_AMT: 8, COVERED_UNTIL: 9 };
+// Payments sheet: DATE, NAME, PLAYER_ID, COMMENT, REFERENCE, TXN_DATE, FROM, TO, ACCOUNT, AMOUNT, REMARKS, PREPAYMENT
+// PREPAYMENT column values: "Prepay", "PostPay", "Adjustment", "Field Booking"
 const PAY = { DATE: 0, NAME: 1, PLAYER_ID: 2, COMMENT: 3, REFERENCE: 4, TXN_DATE: 5, FROM: 6, TO: 7, ACCOUNT: 8, AMOUNT: 9, REMARKS: 10, PREPAYMENT: 11 };
+const SESSION = { DATE: 0, FIELD_COST: 6 }; // Session Input sheet: Column A = Date, Column G = Field Booking Cost
 
 const MONTH_ORDER = {
     jan:0, january:0, feb:1, february:1, mar:2, march:2,
@@ -48,15 +64,28 @@ let state = {
     summary: [],
     attendance: [],
     payments: [],
+    sessionInput: [],
     users: [],
     years: [],
     currentUser: null,
     attendanceSort: { col: null, asc: true },
-    paymentSort: { col: null, asc: true }
+    paymentSort: { col: null, asc: true },
+    isAdminAuthenticated: false
 };
 
 let financialChartInstance = null;
 let activityChartInstance = null;
+let adminRevenueChartInstance = null;
+let adminVelocityChartInstance = null;
+let adminRetentionChartInstance = null;
+
+const ADMIN_PASSWORD = "6769";
+const ADMIN_AUTH_KEY = "ufaAdminAuth";
+const SESSION_COST = 700; // MVR per session
+
+let adminChartState = {
+    activeChart: 'revenue' // 'revenue', 'velocity', or 'retention'
+};
 
 // --- Utilities ---
 
@@ -92,6 +121,31 @@ function getMembershipBadge(row) {
     }
     if (raw === 'Non-Member') return '<span class="status-badge status-non-member">Non-Member</span>';
     return `<span class="status-badge status-member">${isError ? 'Member' : raw}</span>`;
+}
+
+// --- Admin Authentication ---
+
+function checkAdminAuth() {
+    const stored = localStorage.getItem(ADMIN_AUTH_KEY);
+    if (stored === ADMIN_PASSWORD) {
+        state.isAdminAuthenticated = true;
+        return true;
+    }
+    return false;
+}
+
+function setAdminAuth(password) {
+    if (password === ADMIN_PASSWORD) {
+        localStorage.setItem(ADMIN_AUTH_KEY, password);
+        state.isAdminAuthenticated = true;
+        return true;
+    }
+    return false;
+}
+
+function clearAdminAuth() {
+    localStorage.removeItem(ADMIN_AUTH_KEY);
+    state.isAdminAuthenticated = false;
 }
 
 // --- Financial Ledger Engine ---
@@ -170,6 +224,799 @@ function getHealthBadge(ledger) {
     return `<span class="health-badge health-pending">Status: ${label}</span>`;
 }
 
+// --- Admin Metrics Calculations ---
+
+function calculateAdminMetrics(chartTimePeriod = 90, chartBinning = 'weekly') {
+    const metrics = {};
+    metrics.chartTimePeriod = chartTimePeriod;
+    metrics.chartBinning = chartBinning;
+
+    // 1. Total Outstanding Receivables (sum of all pending)
+    metrics.totalPending = state.summary.reduce((sum, r) => sum + parseMoney(r[SUM.PENDING]), 0);
+
+    // 2. Total Prepaid Liability (sum of all prepaid)
+    metrics.totalPrepaid = state.summary.reduce((sum, r) => sum + parseMoney(r[SUM.PREPAY]), 0);
+
+    // 3. Operating Cash (Net Liquidity) = Total Player Payments IN - Field Costs (from Session Input)
+    // Financial tracking started July 1st, 2024 - only include data from then onwards
+    const trackingStartDate = new Date(2024, 6, 1); // July 1, 2024
+
+    // Total Revenue = ALL player payments (ignore classification system)
+    // Prepay, PostPay, Adjustment all count as revenue. Field Booking is historical only (abandoned).
+    let totalPlayerPaymentsIn = 0;
+    let fieldBookingHistorical = 0;
+
+    state.payments.forEach(r => {
+        const amount = parseMoney(r[PAY.AMOUNT]);
+        const paymentType = (r[PAY.PREPAYMENT] || '').trim().toLowerCase();
+        const paymentDate = parseDate(r[PAY.DATE]);
+
+        // Only count payments from tracking start date onwards
+        if (!paymentDate || paymentDate < trackingStartDate) return;
+
+        // Field Booking is historical only (abandoned after centralization)
+        if (paymentType === 'field booking' || paymentType === 'fieldbooking') {
+            fieldBookingHistorical += amount;
+        } else {
+            // Everything else is player revenue (Prepay, PostPay, Adjustment, etc.)
+            totalPlayerPaymentsIn += amount;
+        }
+    });
+
+    // Field Costs = Sum from Session Input sheet (actual booking costs)
+    // Build a map of date -> field cost from Session Input sheet
+    const fieldCostMap = {};
+    state.sessionInput.forEach(row => {
+        const date = row[SESSION.DATE];
+        const cost = parseMoney(row[SESSION.FIELD_COST]);
+        if (date && cost > 0) {
+            fieldCostMap[date] = cost;
+        }
+    });
+
+    // Calculate total field costs for sessions that happened (from attendance records)
+    let totalFieldCosts = 0;
+    const uniqueDates = new Set(
+        state.attendance
+            .map(r => r[ATT.DATE])
+            .filter(dateStr => {
+                const date = parseDate(dateStr);
+                return date && date >= trackingStartDate;
+            })
+    );
+
+    uniqueDates.forEach(dateStr => {
+        // Use actual field cost from Session Input, or default to SESSION_COST (700 MVR)
+        const cost = fieldCostMap[dateStr] || SESSION_COST;
+        totalFieldCosts += cost;
+    });
+
+    metrics.operatingCash = totalPlayerPaymentsIn - totalFieldCosts;
+    metrics.totalRevenue = totalPlayerPaymentsIn;
+    metrics.fieldCostsPaid = totalFieldCosts;
+
+    // Keep netLiquidity for backward compatibility (same as operatingCash)
+    metrics.netLiquidity = metrics.operatingCash;
+
+    console.log(`Field Costs calculation: ${uniqueDates.size} unique sessions × avg ${(totalFieldCosts / uniqueDates.size).toFixed(2)} MVR = ${fmtMoney(totalFieldCosts)}`);
+
+    // 3b. Profit Calculation: Surcharges collected from PAID sessions only
+    // We need to calculate: Collected Profit, Pending Profit, Potential Profit
+    let collectedProfit = 0;
+    let pendingProfit = 0;
+
+    // Debug: Check attendance record structure and surcharge values
+    console.log('\n=== Attendance Record Debug (first 3 records) ===');
+    const sampleAttendance = state.attendance.slice(0, 3);
+    sampleAttendance.forEach((att, idx) => {
+        console.log(`Attendance ${idx + 1}:`, {
+            Name: att[ATT.NAME],
+            Date: att[ATT.DATE],
+            Cost: att[ATT.COST],
+            Membership: att[ATT.MEMBERSHIP],
+            'Surcharge (index 7)': att[ATT.SURCHARGE],
+            'Full record length': att.length,
+            'All values': att
+        });
+    });
+
+    // Count non-zero surcharges
+    let nonZeroSurcharges = 0;
+    let totalSurchargeSum = 0;
+    state.attendance.forEach(r => {
+        const surcharge = parseMoney(r[ATT.SURCHARGE] || 0);
+        if (surcharge > 0) {
+            nonZeroSurcharges++;
+            totalSurchargeSum += surcharge;
+        }
+    });
+    console.log(`\n=== Surcharge Summary ===`);
+    console.log(`Total attendance records: ${state.attendance.length}`);
+    console.log(`Records with non-zero surcharge: ${nonZeroSurcharges}`);
+    console.log(`Total surcharges in attendance: ${fmtMoney(totalSurchargeSum)}`);
+
+    // For each user, get their financial ledger and calculate surcharges
+    state.users.forEach(userName => {
+        const ledger = calculateFinancialLedger(userName);
+
+        // For each session in the ledger, find the attendance record and get surcharge
+        ledger.sessions.forEach(session => {
+            // Find the matching attendance record(s) for this session
+            const attendanceRecords = state.attendance.filter(r =>
+                r[ATT.NAME] === userName &&
+                r[ATT.DATE] === session.dateStr
+            );
+
+            // Sum up surcharges for this session (handles multiple records on same date if any)
+            let sessionSurcharge = 0;
+            attendanceRecords.forEach(attRec => {
+                const surcharge = parseMoney(attRec[ATT.SURCHARGE] || 0);
+                sessionSurcharge += surcharge;
+            });
+
+            // Add to appropriate profit bucket based on payment status
+            if (session.status === 'paid') {
+                collectedProfit += sessionSurcharge;
+            } else if (session.status === 'unpaid' || session.status === 'partial') {
+                pendingProfit += sessionSurcharge;
+            }
+        });
+    });
+
+    console.log(`\n=== Profit Calculation Results ===`);
+    console.log(`Collected Profit (from paid sessions): ${fmtMoney(collectedProfit)}`);
+    console.log(`Pending Profit (from unpaid/partial sessions): ${fmtMoney(pendingProfit)}`);
+
+    metrics.collectedProfit = collectedProfit;
+    metrics.pendingProfit = pendingProfit;
+    metrics.potentialProfit = collectedProfit + pendingProfit;
+
+    // Keep totalProfit for backward compatibility (use collectedProfit as the main metric)
+    metrics.totalProfit = metrics.collectedProfit;
+
+    // 4. Active Players (attended in last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const activePlayers = new Set();
+    state.attendance.forEach(r => {
+        const date = parseDate(r[ATT.DATE]);
+        if (date && date >= thirtyDaysAgo) {
+            activePlayers.add(r[ATT.NAME]);
+        }
+    });
+    metrics.activePlayers = activePlayers.size;
+
+    // 5. Average Attendance per Session
+    const sessionDates = [...new Set(state.attendance.map(r => r[ATT.DATE]))];
+    metrics.avgAttendance = sessionDates.length > 0
+        ? (state.attendance.length / sessionDates.length).toFixed(1)
+        : 0;
+
+    // 6. Player Retention Rate (last 30 days vs previous 30 days)
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const previousPeriodPlayers = new Set();
+    state.attendance.forEach(r => {
+        const date = parseDate(r[ATT.DATE]);
+        if (date && date >= sixtyDaysAgo && date < thirtyDaysAgo) {
+            previousPeriodPlayers.add(r[ATT.NAME]);
+        }
+    });
+
+    if (previousPeriodPlayers.size > 0) {
+        const retainedCount = [...previousPeriodPlayers].filter(p => activePlayers.has(p)).length;
+        metrics.retentionRate = ((retainedCount / previousPeriodPlayers.size) * 100).toFixed(0);
+    } else {
+        metrics.retentionRate = 0;
+    }
+
+    // 7. Payment Velocity (avg days between session and payment)
+    let totalDays = 0;
+    let paidSessionCount = 0;
+
+    state.users.forEach(userName => {
+        const userAttendance = state.attendance.filter(r => r[ATT.NAME] === userName);
+        const userPayments = state.payments.filter(r => r[PAY.NAME] === userName);
+
+        userAttendance.forEach(att => {
+            const attDate = parseDate(att[ATT.DATE]);
+            if (!attDate) return;
+
+            // Find first payment after this session
+            const nextPayment = userPayments.find(pay => {
+                const payDate = parseDate(pay[PAY.DATE]);
+                return payDate && payDate >= attDate;
+            });
+
+            if (nextPayment) {
+                const payDate = parseDate(nextPayment[PAY.DATE]);
+                const daysDiff = Math.floor((payDate - attDate) / (1000 * 60 * 60 * 24));
+                totalDays += daysDiff;
+                paidSessionCount++;
+            }
+        });
+    });
+
+    metrics.paymentVelocity = paidSessionCount > 0
+        ? Math.round(totalDays / paidSessionCount)
+        : 0;
+
+    // 8. Top 10 Debtors
+    const debtors = state.summary
+        .map(r => ({
+            name: r[SUM.NAME],
+            pending: parseMoney(r[SUM.PENDING])
+        }))
+        .filter(d => d.pending > 0)
+        .sort((a, b) => b.pending - a.pending)
+        .slice(0, 10);
+    metrics.topDebtors = debtors;
+
+    // 8b. Calculate Yearly Financial Data
+    const yearlyData = {};
+
+    // Aggregate payments by year for Revenue
+    // Revenue = ALL player payments (Prepay, PostPay, Adjustment)
+    // EXCLUDE only Field Booking (historical, abandoned concept)
+    state.payments.forEach(r => {
+        const date = parseDate(r[PAY.DATE]);
+        if (!date) return;
+
+        const year = date.getFullYear();
+        const amount = parseMoney(r[PAY.AMOUNT]);
+        const paymentType = (r[PAY.PREPAYMENT] || '').trim().toLowerCase();
+
+        // Skip Field Booking payments (historical only)
+        if (paymentType === 'field booking' || paymentType === 'fieldbooking') {
+            return;
+        }
+
+        // Initialize year if not exists
+        if (!yearlyData[year]) {
+            yearlyData[year] = {
+                year: year,
+                revenue: 0,
+                profit: 0,
+                fieldCosts: 0
+            };
+        }
+
+        // Count all other payments as revenue
+        yearlyData[year].revenue += amount;
+    });
+
+    // Aggregate attendance by year for Profit
+    state.attendance.forEach(r => {
+        const date = parseDate(r[ATT.DATE]);
+        if (!date) return;
+
+        const year = date.getFullYear();
+        const surcharge = parseMoney(r[ATT.SURCHARGE] || 0);
+
+        // Initialize year if not exists
+        if (!yearlyData[year]) {
+            yearlyData[year] = {
+                year: year,
+                revenue: 0,
+                profit: 0,
+                fieldCosts: 0
+            };
+        }
+
+        // Sum up surcharges for profit
+        yearlyData[year].profit += surcharge;
+    });
+
+    // Aggregate field costs by year
+    state.attendance.forEach(r => {
+        const date = parseDate(r[ATT.DATE]);
+        if (!date) return;
+
+        const year = date.getFullYear();
+        const dateStr = r[ATT.DATE];
+
+        // Initialize year if not exists
+        if (!yearlyData[year]) {
+            yearlyData[year] = {
+                year: year,
+                revenue: 0,
+                profit: 0,
+                fieldCosts: 0
+            };
+        }
+
+        // Get field cost for this session
+        const cost = fieldCostMap[dateStr] || SESSION_COST;
+
+        // Track unique dates to avoid double counting
+        if (!yearlyData[year].sessionDates) {
+            yearlyData[year].sessionDates = new Set();
+        }
+
+        if (!yearlyData[year].sessionDates.has(dateStr)) {
+            yearlyData[year].sessionDates.add(dateStr);
+            yearlyData[year].fieldCosts += cost;
+        }
+    });
+
+    // Clean up temporary sessionDates tracking
+    Object.values(yearlyData).forEach(y => delete y.sessionDates);
+
+    // Convert to array and sort by year descending
+    metrics.yearlyData = Object.values(yearlyData).sort((a, b) => b.year - a.year);
+
+    console.log('=== Yearly Data Calculated ===');
+    console.log('Years found:', metrics.yearlyData.map(y => y.year));
+    console.log('Full yearly data:', metrics.yearlyData);
+
+    // 9. New Player Acquisition (first-time players this month)
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const newPlayersThisMonth = new Set();
+
+    state.users.forEach(userName => {
+        const userSessions = state.attendance
+            .filter(r => r[ATT.NAME] === userName)
+            .map(r => ({ date: parseDate(r[ATT.DATE]), dateStr: r[ATT.DATE] }))
+            .filter(s => s.date)
+            .sort((a, b) => a.date - b.date);
+
+        if (userSessions.length > 0) {
+            const firstSession = userSessions[0].date;
+            if (firstSession.getMonth() === currentMonth && firstSession.getFullYear() === currentYear) {
+                newPlayersThisMonth.add(userName);
+            }
+        }
+    });
+    metrics.newPlayers = newPlayersThisMonth.size;
+
+    // 10. Revenue Trend (this week vs last week)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    let thisWeekRevenue = 0;
+    let lastWeekRevenue = 0;
+
+    state.payments.forEach(r => {
+        const payDate = parseDate(r[PAY.DATE]);
+        if (!payDate) return;
+        const amount = parseMoney(r[PAY.AMOUNT]);
+
+        if (payDate >= sevenDaysAgo) {
+            thisWeekRevenue += amount;
+        } else if (payDate >= fourteenDaysAgo && payDate < sevenDaysAgo) {
+            lastWeekRevenue += amount;
+        }
+    });
+
+    if (lastWeekRevenue > 0) {
+        const percentChange = ((thisWeekRevenue - lastWeekRevenue) / lastWeekRevenue * 100).toFixed(0);
+        metrics.revenueTrend = percentChange >= 0 ? `+${percentChange}%` : `${percentChange}%`;
+    } else {
+        metrics.revenueTrend = thisWeekRevenue > 0 ? "+100%" : "--";
+    }
+
+    // 11. Dynamic revenue and attendance data for chart
+    const chartData = calculateChartData(chartTimePeriod, chartBinning);
+    metrics.chartLabels = chartData.labels;
+    metrics.chartRevenue = chartData.revenue;
+    metrics.chartAttendance = chartData.attendance;
+
+    return metrics;
+}
+
+function validateAdminMetrics(metrics) {
+    console.log('=== Financial Metrics Validation ===');
+
+    const trackingStartDate = new Date(2024, 6, 1); // July 1, 2024
+
+    // Count payments by type for detailed breakdown
+    let prepayCount = 0, prepaySum = 0;
+    let postpayCount = 0, postpaySum = 0;
+    let adjustmentCount = 0, adjustmentSum = 0;
+    let fieldBookingCount = 0, fieldBookingSum = 0;
+    let otherCount = 0, otherSum = 0;
+
+    state.payments.forEach(r => {
+        const amount = parseMoney(r[PAY.AMOUNT]);
+        const paymentType = (r[PAY.PREPAYMENT] || '').trim();
+        const paymentTypeLower = paymentType.toLowerCase();
+        const paymentDate = parseDate(r[PAY.DATE]);
+
+        // Only count payments from tracking start date onwards
+        if (!paymentDate || paymentDate < trackingStartDate) return;
+
+        if (paymentTypeLower === 'prepay') {
+            prepayCount++;
+            prepaySum += amount;
+        } else if (paymentTypeLower === 'postpay') {
+            postpayCount++;
+            postpaySum += amount;
+        } else if (paymentTypeLower === 'adjustment') {
+            adjustmentCount++;
+            adjustmentSum += amount;
+        } else if (paymentTypeLower === 'field booking' || paymentTypeLower === 'fieldbooking') {
+            fieldBookingCount++;
+            fieldBookingSum += amount;
+        } else {
+            otherCount++;
+            otherSum += amount;
+            if (amount > 0) {
+                console.log(`⚠️ Unknown payment type: "${paymentType}", Amount=${fmtMoney(amount)}`);
+            }
+        }
+    });
+
+    console.log('\n=== Payment Breakdown (since July 1, 2024) ===');
+    console.log(`Prepay:             ${prepayCount} payments = ${fmtMoney(prepaySum)}`);
+    console.log(`PostPay:            ${postpayCount} payments = ${fmtMoney(postpaySum)}`);
+    console.log(`Adjustment:         ${adjustmentCount} payments = ${fmtMoney(adjustmentSum)}`);
+    console.log(`Field Booking:      ${fieldBookingCount} payments = ${fmtMoney(fieldBookingSum)} (historical, abandoned)`);
+    if (otherCount > 0) {
+        console.log(`Other/Unknown:      ${otherCount} payments = ${fmtMoney(otherSum)}`);
+    }
+    console.log(`─────────────────────────────────────────────────────`);
+    console.log(`Total Player Revenue: ${fmtMoney(prepaySum + postpaySum + adjustmentSum)}`);
+    console.log(`(All payments except historical Field Booking)`);
+
+    // Count sessions and field costs
+    const uniqueDates = new Set(
+        state.attendance
+            .map(r => r[ATT.DATE])
+            .filter(dateStr => {
+                const date = parseDate(dateStr);
+                return date && date >= trackingStartDate;
+            })
+    );
+    console.log(`\n=== Field Costs (from Session Input) ===`);
+    console.log(`Total Sessions: ${uniqueDates.size} sessions`);
+    console.log(`Avg Cost per Session: ${fmtMoney(metrics.fieldCostsPaid / uniqueDates.size)}`);
+    console.log(`Total Field Costs: ${fmtMoney(metrics.fieldCostsPaid)}`);
+
+    // Validation 1: Operating Cash Formula
+    const expectedOperatingCash = metrics.totalRevenue - metrics.fieldCostsPaid;
+    const operatingCashDiff = Math.abs(metrics.operatingCash - expectedOperatingCash);
+    console.log(`\n=== Operating Cash Validation ===`);
+    console.log(`Operating Cash: ${fmtMoney(metrics.operatingCash)}`);
+    console.log(`  = Total Revenue (${fmtMoney(metrics.totalRevenue)}) - Field Costs (${fmtMoney(metrics.fieldCostsPaid)})`);
+    console.log(`  Expected: ${fmtMoney(expectedOperatingCash)}, Diff: ${fmtMoney(operatingCashDiff)}`);
+    if (operatingCashDiff > 0.01) {
+        console.warn('⚠️ Operating Cash does not balance!');
+    } else {
+        console.log('✓ Operating Cash balances correctly');
+    }
+
+    // Show if operating at profit or loss
+    if (metrics.operatingCash > 0) {
+        console.log(`✓ Operating with surplus: ${fmtMoney(metrics.operatingCash)}`);
+    } else if (metrics.operatingCash < 0) {
+        console.log(`⚠️ Operating at deficit: ${fmtMoney(Math.abs(metrics.operatingCash))}`);
+    } else {
+        console.log(`Operating at break-even`);
+    }
+
+    // Validation 2: Profit Formula
+    const expectedPotentialProfit = metrics.collectedProfit + metrics.pendingProfit;
+    const profitDiff = Math.abs(metrics.potentialProfit - expectedPotentialProfit);
+    console.log(`\nPotential Profit: ${fmtMoney(metrics.potentialProfit)}`);
+    console.log(`  = Collected Profit (${fmtMoney(metrics.collectedProfit)}) + Pending Profit (${fmtMoney(metrics.pendingProfit)})`);
+    console.log(`  Expected: ${fmtMoney(expectedPotentialProfit)}, Diff: ${fmtMoney(profitDiff)}`);
+    if (profitDiff > 0.01) {
+        console.warn('⚠️ Potential Profit does not balance!');
+    } else {
+        console.log('✓ Potential Profit balances correctly');
+    }
+
+    // Validation 3: Sanity Checks
+    console.log('\n=== Sanity Checks ===');
+    console.log(`Operating Cash > 0: ${metrics.operatingCash > 0 ? '✓' : '✗'} (${fmtMoney(metrics.operatingCash)})`);
+    console.log(`Operating Cash < Total Revenue: ${metrics.operatingCash < metrics.totalRevenue ? '✓' : '✗'}`);
+    console.log(`Collected Profit >= 0: ${metrics.collectedProfit >= 0 ? '✓' : '✗'} (${fmtMoney(metrics.collectedProfit)})`);
+    console.log(`Collected Profit < Operating Cash: ${metrics.collectedProfit < metrics.operatingCash ? '✓' : '✗'}`);
+
+    // Show sample payment records to verify column structure
+    console.log('\n=== Sample Payment Records (first 3) ===');
+    const samplePayments = state.payments.slice(0, 3);
+    samplePayments.forEach((p, idx) => {
+        console.log(`Payment ${idx + 1}:`, {
+            Date: p[PAY.DATE],
+            Name: p[PAY.NAME],
+            Amount: p[PAY.AMOUNT],
+            PaymentType: p[PAY.PREPAYMENT],
+            Reference: p[PAY.REFERENCE]
+        });
+    });
+
+    // Log all key metrics for review
+    console.log('\n=== Financial Summary ===');
+    console.log(`Total Revenue: ${fmtMoney(metrics.totalRevenue)}`);
+    console.log(`Field Costs Paid: ${fmtMoney(metrics.fieldCostsPaid)}`);
+    console.log(`Operating Cash: ${fmtMoney(metrics.operatingCash)}`);
+    console.log(`Collected Profit: ${fmtMoney(metrics.collectedProfit)}`);
+    console.log(`Pending Profit: ${fmtMoney(metrics.pendingProfit)}`);
+    console.log(`Potential Profit: ${fmtMoney(metrics.potentialProfit)}`);
+    console.log('=====================================\n');
+}
+
+function calculateChartData(timePeriod, binning) {
+    const now = new Date();
+    const labels = [];
+    const revenue = [];
+    const attendance = [];
+
+    // Calculate start date
+    let startDate;
+    if (timePeriod === 'all') {
+        // Find earliest date in attendance or payments
+        const allDates = [
+            ...state.attendance.map(r => parseDate(r[ATT.DATE])),
+            ...state.payments.map(r => parseDate(r[PAY.DATE]))
+        ].filter(d => d).sort((a, b) => a - b);
+
+        startDate = allDates.length > 0 ? allDates[0] : new Date();
+    } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(timePeriod));
+    }
+
+    // Generate time buckets based on binning
+    const buckets = [];
+
+    if (binning === 'daily') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            buckets.push({
+                start: new Date(currentDate),
+                end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59),
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    } else if (binning === 'weekly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const weekEnd = new Date(currentDate);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            buckets.push({
+                start: new Date(currentDate),
+                end: weekEnd > now ? now : weekEnd,
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 7);
+        }
+    } else if (binning === 'monthly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+            buckets.push({
+                start: new Date(currentDate),
+                end: monthEnd > now ? now : monthEnd,
+                label: `${SHORT_MONTHS[currentDate.getMonth()]} ${String(currentDate.getFullYear()).slice(2)}`
+            });
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            currentDate.setDate(1);
+        }
+    }
+
+    // Aggregate data into buckets
+    buckets.forEach(bucket => {
+        let bucketRevenue = 0;
+        let bucketAttendance = 0;
+
+        // Sum revenue for this bucket
+        state.payments.forEach(r => {
+            const payDate = parseDate(r[PAY.DATE]);
+            if (payDate && payDate >= bucket.start && payDate <= bucket.end) {
+                bucketRevenue += parseMoney(r[PAY.AMOUNT]);
+            }
+        });
+
+        // Count attendance for this bucket
+        state.attendance.forEach(r => {
+            const attDate = parseDate(r[ATT.DATE]);
+            if (attDate && attDate >= bucket.start && attDate <= bucket.end) {
+                bucketAttendance++;
+            }
+        });
+
+        labels.push(bucket.label);
+        revenue.push(bucketRevenue);
+        attendance.push(bucketAttendance);
+    });
+
+    return { labels, revenue, attendance };
+}
+
+function calculatePaymentVelocityChartData(timePeriod, binning) {
+    const now = new Date();
+    const labels = [];
+    const velocities = [];
+
+    // Calculate start date
+    let startDate;
+    if (timePeriod === 'all') {
+        const allDates = [
+            ...state.attendance.map(r => parseDate(r[ATT.DATE])),
+            ...state.payments.map(r => parseDate(r[PAY.DATE]))
+        ].filter(d => d).sort((a, b) => a - b);
+        startDate = allDates.length > 0 ? allDates[0] : new Date();
+    } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(timePeriod));
+    }
+
+    // Generate time buckets
+    const buckets = [];
+    if (binning === 'daily') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            buckets.push({
+                start: new Date(currentDate),
+                end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59),
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    } else if (binning === 'weekly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const weekEnd = new Date(currentDate);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            buckets.push({
+                start: new Date(currentDate),
+                end: weekEnd > now ? now : weekEnd,
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 7);
+        }
+    } else if (binning === 'monthly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+            buckets.push({
+                start: new Date(currentDate),
+                end: monthEnd > now ? now : monthEnd,
+                label: `${SHORT_MONTHS[currentDate.getMonth()]} ${String(currentDate.getFullYear()).slice(2)}`
+            });
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            currentDate.setDate(1);
+        }
+    }
+
+    // Calculate payment velocity for each bucket
+    buckets.forEach(bucket => {
+        let totalDays = 0;
+        let count = 0;
+
+        // For each session in this bucket, find the payment velocity
+        state.attendance.forEach(attRec => {
+            const attDate = parseDate(attRec[ATT.DATE]);
+            if (!attDate || attDate < bucket.start || attDate > bucket.end) return;
+
+            const userName = attRec[ATT.NAME];
+            const userPayments = state.payments.filter(p => p[PAY.NAME] === userName);
+
+            // Find first payment after this session
+            const nextPayment = userPayments.find(pay => {
+                const payDate = parseDate(pay[PAY.DATE]);
+                return payDate && payDate >= attDate;
+            });
+
+            if (nextPayment) {
+                const payDate = parseDate(nextPayment[PAY.DATE]);
+                const daysDiff = Math.floor((payDate - attDate) / (1000 * 60 * 60 * 24));
+                totalDays += daysDiff;
+                count++;
+            }
+        });
+
+        labels.push(bucket.label);
+        velocities.push(count > 0 ? Math.round(totalDays / count) : null);
+    });
+
+    return { labels, velocities };
+}
+
+function calculateRetentionRateChartData(timePeriod, binning) {
+    const now = new Date();
+    const labels = [];
+    const retentionRates = [];
+
+    // Calculate start date
+    let startDate;
+    if (timePeriod === 'all') {
+        const allDates = state.attendance.map(r => parseDate(r[ATT.DATE])).filter(d => d).sort((a, b) => a - b);
+        startDate = allDates.length > 0 ? allDates[0] : new Date();
+    } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(timePeriod));
+    }
+
+    // Generate time buckets
+    const buckets = [];
+    if (binning === 'daily') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            buckets.push({
+                start: new Date(currentDate),
+                end: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59),
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    } else if (binning === 'weekly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const weekEnd = new Date(currentDate);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            buckets.push({
+                start: new Date(currentDate),
+                end: weekEnd > now ? now : weekEnd,
+                label: `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+            });
+            currentDate.setDate(currentDate.getDate() + 7);
+        }
+    } else if (binning === 'monthly') {
+        const currentDate = new Date(startDate);
+        while (currentDate <= now) {
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+            buckets.push({
+                start: new Date(currentDate),
+                end: monthEnd > now ? now : monthEnd,
+                label: `${SHORT_MONTHS[currentDate.getMonth()]} ${String(currentDate.getFullYear()).slice(2)}`
+            });
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            currentDate.setDate(1);
+        }
+    }
+
+    // Calculate retention rate for each bucket
+    for (let i = 0; i < buckets.length; i++) {
+        const bucket = buckets[i];
+        const prevBucket = i > 0 ? buckets[i - 1] : null;
+
+        if (!prevBucket) {
+            labels.push(bucket.label);
+            retentionRates.push(null); // No previous period to compare
+            continue;
+        }
+
+        // Get players from previous bucket
+        const prevPlayers = new Set();
+        state.attendance.forEach(r => {
+            const attDate = parseDate(r[ATT.DATE]);
+            if (attDate && attDate >= prevBucket.start && attDate <= prevBucket.end) {
+                prevPlayers.add(r[ATT.NAME]);
+            }
+        });
+
+        // Get players from current bucket
+        const currPlayers = new Set();
+        state.attendance.forEach(r => {
+            const attDate = parseDate(r[ATT.DATE]);
+            if (attDate && attDate >= bucket.start && attDate <= bucket.end) {
+                currPlayers.add(r[ATT.NAME]);
+            }
+        });
+
+        // Calculate retention
+        if (prevPlayers.size > 0) {
+            const retained = [...prevPlayers].filter(p => currPlayers.has(p)).length;
+            const retentionRate = (retained / prevPlayers.size) * 100;
+            labels.push(bucket.label);
+            retentionRates.push(Math.round(retentionRate));
+        } else {
+            labels.push(bucket.label);
+            retentionRates.push(null);
+        }
+    }
+
+    return { labels, retentionRates };
+}
+
 // --- Network Utilities ---
 
 async function fetchWithRetry(url, retries = 3, delay = 1000) {
@@ -193,10 +1040,11 @@ async function initApp() {
         $('#loadingState').show();
 
         // Fetch main data only (removed metadata fetch - was causing 100% API errors)
-        const [summaryRes, attendanceRes, paymentsRes] = await Promise.all([
+        const [summaryRes, attendanceRes, paymentsRes, sessionInputRes] = await Promise.all([
             fetchWithRetry(`${CONFIG.baseUrl}/${CONFIG.sheetID}/values/Summary Sheet?key=${CONFIG.apiKey}`),
             fetchWithRetry(`${CONFIG.baseUrl}/${CONFIG.sheetID}/values/PivotAttendance?key=${CONFIG.apiKey}`),
-            fetchWithRetry(`${CONFIG.baseUrl}/${CONFIG.sheetID}/values/Payments?key=${CONFIG.apiKey}`)
+            fetchWithRetry(`${CONFIG.baseUrl}/${CONFIG.sheetID}/values/Payments?key=${CONFIG.apiKey}`),
+            fetchWithRetry(`${CONFIG.baseUrl}/${CONFIG.sheetID}/values/Session Input?key=${CONFIG.apiKey}`)
         ]);
 
         // Validate API responses
@@ -213,16 +1061,18 @@ async function initApp() {
         const rawSummary = summaryRes.values.slice(1);
         const rawAttendance = attendanceRes.values.slice(1);
         const rawPayments = (paymentsRes.values || []).slice(1);
+        const rawSessionInput = (sessionInputRes.values || []).slice(1);
 
-        console.log(`Raw data counts - Summary: ${rawSummary.length}, Attendance: ${rawAttendance.length}, Payments: ${rawPayments.length}`);
+        console.log(`Raw data counts - Summary: ${rawSummary.length}, Attendance: ${rawAttendance.length}, Payments: ${rawPayments.length}, SessionInput: ${rawSessionInput.length}`);
 
         // Filter out completely empty rows, but be lenient with column count
         state.summary = rawSummary.filter(row => row && row.length > 0 && row[SUM.NAME]);
         state.attendance = rawAttendance.filter(row => row && row.length > 0 && row[ATT.NAME]);
         state.payments = rawPayments.filter(row => row && row.length > 0);
+        state.sessionInput = rawSessionInput.filter(row => row && row.length > 0 && row[SESSION.DATE]);
         state.users = [...new Set(state.summary.map(r => r[SUM.NAME]))].filter(Boolean).sort();
 
-        console.log(`Filtered data counts - Summary: ${state.summary.length}, Attendance: ${state.attendance.length}, Payments: ${state.payments.length}`);
+        console.log(`Filtered data counts - Summary: ${state.summary.length}, Attendance: ${state.attendance.length}, Payments: ${state.payments.length}, SessionInput: ${state.sessionInput.length}`);
 
         if (state.summary.length === 0 || state.attendance.length === 0) {
             throw new Error(`No valid data found. Summary: ${state.summary.length} rows, Attendance: ${state.attendance.length} rows`);
@@ -234,6 +1084,10 @@ async function initApp() {
 
         populateFilters();
         setupEventListeners();
+
+        // Check admin auth on page load
+        checkAdminAuth();
+
         $('#loadingState').hide();
 
         const urlUser = new URLSearchParams(window.location.search).get('user');
@@ -677,6 +1531,46 @@ function renderAttendanceTable(data) {
 
 // --- All Payments Table ---
 
+function populateFilterDropdowns() {
+    // Extract unique years from "Covered Until" dates
+    const coveredYears = new Set();
+    state.summary.forEach(r => {
+        const date = parseDate(r[SUM.COVERED_UNTIL]);
+        if (date) coveredYears.add(date.getFullYear());
+    });
+    const sortedCoveredYears = Array.from(coveredYears).sort((a, b) => b - a);
+
+    // Extract unique years from "Last Payment Date"
+    const paymentYears = new Set();
+    state.summary.forEach(r => {
+        const date = parseDate(r[SUM.LAST_PAID_DATE]);
+        if (date) paymentYears.add(date.getFullYear());
+    });
+    const sortedPaymentYears = Array.from(paymentYears).sort((a, b) => b - a);
+
+    // Populate Covered Year dropdown
+    const currentCoveredYear = $('#coveredYearFilter').val();
+    const coveredYearOptions = ['<option value="all">All Years</option>'].concat(
+        sortedCoveredYears.map(y => `<option value="${y}" ${currentCoveredYear == y ? 'selected' : ''}>${y}</option>`)
+    ).join('');
+    $('#coveredYearFilter').html(coveredYearOptions);
+
+    // Populate Last Payment Year dropdown
+    const currentPaymentYear = $('#lastPaymentYearFilter').val();
+    const paymentYearOptions = ['<option value="all">All Years</option>'].concat(
+        sortedPaymentYears.map(y => `<option value="${y}" ${currentPaymentYear == y ? 'selected' : ''}>${y}</option>`)
+    ).join('');
+    $('#lastPaymentYearFilter').html(paymentYearOptions);
+
+    // Populate Last Payment Month dropdown
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentPaymentMonth = $('#lastPaymentMonthFilter').val();
+    const monthOptions = ['<option value="all">All Months</option>'].concat(
+        monthNames.map((m, i) => `<option value="${i}" ${currentPaymentMonth == i ? 'selected' : ''}>${m}</option>`)
+    ).join('');
+    $('#lastPaymentMonthFilter').html(monthOptions);
+}
+
 function renderAllPayments() {
     $('#welcomeMessage').hide();
     $('#userDashboard').hide();
@@ -684,11 +1578,27 @@ function renderAllPayments() {
 
     const statusFilter = $('#paymentStatusFilter').val();
     const showNeverPaid = $('#neverPaidToggle').el.checked;
+    const showOneSession = $('#oneSessionToggle').el?.checked || false;
+    const coveredYearFilter = $('#coveredYearFilter').val();
+    const lastPaymentYearFilter = $('#lastPaymentYearFilter').val();
+    const lastPaymentMonthFilter = $('#lastPaymentMonthFilter').val();
 
+    // Show/hide filter groups based on status filter
     if (statusFilter === 'pending') {
         $('#neverPaidFilterGroup').css('display', 'flex');
+        $('#coveredYearFilterGroup').css('display', 'flex');
+        $('#lastPaymentFilterGroup').css('display', 'flex');
+        $('#lastPaymentMonthFilterGroup').css('display', 'flex');
+        $('#oneSessionFilterGroup').css('display', 'flex');
+
+        // Populate year dropdowns if not already populated
+        populateFilterDropdowns();
     } else {
         $('#neverPaidFilterGroup').hide();
+        $('#coveredYearFilterGroup').hide();
+        $('#lastPaymentFilterGroup').hide();
+        $('#lastPaymentMonthFilterGroup').hide();
+        $('#oneSessionFilterGroup').hide();
     }
 
     let data = state.summary.filter(r => {
@@ -697,12 +1607,47 @@ function renderAllPayments() {
 
         if (statusFilter === 'pending') {
             const isPending = pend > 0;
-            if (isPending && showNeverPaid) {
+            if (!isPending) return false;
+
+            // Apply "Never Paid Only" filter
+            if (showNeverPaid) {
                 const coveredDate = r[SUM.COVERED_UNTIL];
                 const hasNoDate = !coveredDate || coveredDate === '-' || coveredDate.trim() === '';
-                return hasNoDate;
+                if (!hasNoDate) return false;
             }
-            return isPending;
+
+            // Apply "One Session Only" filter
+            if (showOneSession) {
+                const ledger = calculateFinancialLedger(r[SUM.NAME]);
+                const unpaidSessions = ledger.sessions.filter(s => s.status === 'unpaid' || s.status === 'partial');
+                if (unpaidSessions.length !== 1) return false;
+            }
+
+            // Apply "Covered Until Year" filter
+            if (coveredYearFilter !== 'all') {
+                const coveredDate = parseDate(r[SUM.COVERED_UNTIL]);
+                if (!coveredDate || coveredDate.getFullYear() !== parseInt(coveredYearFilter)) {
+                    return false;
+                }
+            }
+
+            // Apply "Last Payment Year" filter
+            if (lastPaymentYearFilter !== 'all') {
+                const lastPaymentDate = parseDate(r[SUM.LAST_PAID_DATE]);
+                if (!lastPaymentDate || lastPaymentDate.getFullYear() !== parseInt(lastPaymentYearFilter)) {
+                    return false;
+                }
+            }
+
+            // Apply "Last Payment Month" filter
+            if (lastPaymentMonthFilter !== 'all') {
+                const lastPaymentDate = parseDate(r[SUM.LAST_PAID_DATE]);
+                if (!lastPaymentDate || lastPaymentDate.getMonth() !== parseInt(lastPaymentMonthFilter)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         if (statusFilter === 'prepaid') return pre > 0;
@@ -755,6 +1700,401 @@ function renderAllPayments() {
     $('#totalPendingSum').text(fmtMoney(tPending));
     $('#totalPrepaySum').text(fmtMoney(tPrepay));
     $('#totalPaymentSum').text(fmtMoney(tPaid));
+}
+
+// --- Admin Dashboard ---
+
+function renderAdminDashboard() {
+    $('#welcomeMessage').hide();
+    $('#userDashboard').hide();
+    $('#adminPanel').show();
+
+    // Get chart settings from dropdowns (default to 90 days, weekly if not set)
+    const chartTimePeriod = $('#revenueTimePeriod').val() || '90';
+    const chartBinning = $('#revenueBinning').val() || 'weekly';
+
+    const metrics = calculateAdminMetrics(chartTimePeriod, chartBinning);
+
+    // Store metrics in state so other functions can access them
+    state.adminMetrics = metrics;
+
+    // Validate metrics (logs to console)
+    validateAdminMetrics(metrics);
+
+    // Top row tiles
+    $('#adminTotalPending').text(fmtMoney(metrics.totalPending));
+    $('#adminTotalPrepaid').text(fmtMoney(metrics.totalPrepaid));
+    $('#adminActivePlayers').text(metrics.activePlayers);
+    $('#adminTotalProfit').text(fmtMoney(metrics.collectedProfit)); // Changed to collectedProfit
+
+    // Additional metrics
+    $('#adminOperatingCash').text(fmtMoney(metrics.operatingCash));
+    $('#adminAvgAttendance').text(metrics.avgAttendance);
+    $('#adminPaymentVelocity').text(`${metrics.paymentVelocity} days`);
+    $('#adminRetentionRate').text(`${metrics.retentionRate}%`);
+    $('#adminNewPlayers').text(metrics.newPlayers);
+    $('#adminRevenueTrend').text(metrics.revenueTrend);
+    $('#adminPendingProfit').text(fmtMoney(metrics.pendingProfit));
+    $('#adminPotentialProfit').text(fmtMoney(metrics.potentialProfit));
+    $('#adminTotalRevenue').text(fmtMoney(metrics.totalRevenue));
+    $('#adminFieldCostsPaid').text(fmtMoney(metrics.fieldCostsPaid));
+
+    // Top 10 Debtors List
+    const debtorsHtml = metrics.topDebtors.length > 0
+        ? metrics.topDebtors.map((d, idx) => `
+            <div class="debtor-item">
+                <div class="debtor-rank">${idx + 1}</div>
+                <div class="debtor-name">
+                    <a href="#" class="text-link user-link" data-name="${d.name}">${d.name}</a>
+                </div>
+                <div class="debtor-amount">${fmtMoney(d.pending)}</div>
+            </div>
+        `).join('')
+        : '<div style="color: #888; text-align: center; padding: 20px;">No pending payments</div>';
+
+    $('#adminTopDebtors').html(debtorsHtml);
+
+    // Render Yearly Financial Data Table
+    renderYearlyDataTable();
+
+    // Render all charts (only the active one will be visible)
+    renderAdminRevenueChart(metrics);
+    renderAdminVelocityChart(chartTimePeriod, chartBinning);
+    renderAdminRetentionChart(chartTimePeriod, chartBinning);
+
+    // Render the "All Data" table within admin panel
+    renderAllPayments();
+}
+
+function renderYearlyDataTable() {
+    const yearRangeFilter = $('#yearRangeFilter').val() || 'all';
+    const metrics = state.adminMetrics;
+
+    console.log('=== renderYearlyDataTable called ===');
+    console.log('state.adminMetrics:', state.adminMetrics);
+    console.log('metrics:', metrics);
+    console.log('metrics.yearlyData:', metrics?.yearlyData);
+
+    if (!metrics || !metrics.yearlyData) {
+        console.log('No metrics or yearlyData found!');
+        $('#adminYearlyDataTable').html('<div style="color: #888; text-align: center; padding: 20px;">No data available</div>');
+        return;
+    }
+
+    // Filter data based on selected year
+    let data = [...metrics.yearlyData];
+
+    if (yearRangeFilter !== 'all') {
+        const selectedYear = parseInt(yearRangeFilter);
+        data = data.filter(d => d.year === selectedYear);
+    }
+
+    // Generate table HTML
+    if (data.length === 0) {
+        $('#adminYearlyDataTable').html('<div style="color: #888; text-align: center; padding: 20px;">No data for selected period</div>');
+        return;
+    }
+
+    // Calculate totals
+    let totalRevenue = 0, totalProfit = 0, totalFieldCosts = 0;
+    data.forEach(d => {
+        totalRevenue += d.revenue;
+        totalProfit += d.profit;
+        totalFieldCosts += d.fieldCosts;
+    });
+
+    const tableHtml = `
+        <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+                    <tr>
+                        <th style="text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057;">Year</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057;">Revenue</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057;">Profit</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057;">Field Costs</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057;">Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(d => {
+                        const net = d.revenue - d.fieldCosts;
+                        return `
+                            <tr style="border-bottom: 1px solid #e9ecef;">
+                                <td style="padding: 10px; font-weight: 600;">${d.year}</td>
+                                <td style="padding: 10px; text-align: right; color: #28a745;">${fmtMoney(d.revenue)}</td>
+                                <td style="padding: 10px; text-align: right; color: #17a2b8;">${fmtMoney(d.profit)}</td>
+                                <td style="padding: 10px; text-align: right; color: #dc3545;">${fmtMoney(d.fieldCosts)}</td>
+                                <td style="padding: 10px; text-align: right; font-weight: 600; color: ${net >= 0 ? '#28a745' : '#dc3545'};">${fmtMoney(net)}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+                <tfoot style="background: #f8f9fa; font-weight: bold; border-top: 2px solid #495057;">
+                    <tr>
+                        <td style="padding: 12px;">Total</td>
+                        <td style="padding: 12px; text-align: right; color: #28a745;">${fmtMoney(totalRevenue)}</td>
+                        <td style="padding: 12px; text-align: right; color: #17a2b8;">${fmtMoney(totalProfit)}</td>
+                        <td style="padding: 12px; text-align: right; color: #dc3545;">${fmtMoney(totalFieldCosts)}</td>
+                        <td style="padding: 12px; text-align: right; color: ${(totalRevenue - totalFieldCosts) >= 0 ? '#28a745' : '#dc3545'};">${fmtMoney(totalRevenue - totalFieldCosts)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    $('#adminYearlyDataTable').html(tableHtml);
+}
+
+function renderAdminRevenueChart(metrics) {
+    const ctx = document.getElementById('adminRevenueChart').getContext('2d');
+
+    if (adminRevenueChartInstance) adminRevenueChartInstance.destroy();
+
+    const labels = metrics.chartLabels;
+    const revenueData = metrics.chartRevenue;
+    const attendanceData = metrics.chartAttendance;
+
+    // Determine label based on binning
+    const binningLabel = metrics.chartBinning === 'daily' ? 'Daily' :
+                        metrics.chartBinning === 'weekly' ? 'Weekly' : 'Monthly';
+
+    adminRevenueChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: `${binningLabel} Revenue (MVR)`,
+                    data: revenueData,
+                    backgroundColor: 'rgba(76, 175, 80, 0.6)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y',
+                    borderRadius: 4
+                },
+                {
+                    type: 'line',
+                    label: `${binningLabel} Attendance`,
+                    data: attendanceData,
+                    borderColor: 'rgba(72, 141, 170, 1)',
+                    backgroundColor: 'rgba(72, 141, 170, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y1',
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Revenue (MVR)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + ' MVR';
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Attendance'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            if (label.includes('Revenue')) {
+                                return ` ${label}: ${value.toFixed(2)} MVR`;
+                            }
+                            return ` ${label}: ${value}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderAdminVelocityChart(timePeriod, binning) {
+    const ctx = document.getElementById('adminVelocityChart').getContext('2d');
+
+    if (adminVelocityChartInstance) adminVelocityChartInstance.destroy();
+
+    const chartData = calculatePaymentVelocityChartData(timePeriod, binning);
+    const labels = chartData.labels;
+    const velocities = chartData.velocities;
+
+    const binningLabel = binning === 'daily' ? 'Daily' : binning === 'weekly' ? 'Weekly' : 'Monthly';
+
+    adminVelocityChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: `${binningLabel} Payment Velocity (Days)`,
+                    data: velocities,
+                    borderColor: 'rgba(255, 152, 0, 1)',
+                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    borderWidth: 3,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: 'rgba(255, 152, 0, 1)',
+                    tension: 0.3,
+                    spanGaps: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Days'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return Math.round(value) + ' days';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            return ` Average: ${value !== null ? Math.round(value) + ' days' : 'No data'}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderAdminRetentionChart(timePeriod, binning) {
+    const ctx = document.getElementById('adminRetentionChart').getContext('2d');
+
+    if (adminRetentionChartInstance) adminRetentionChartInstance.destroy();
+
+    const chartData = calculateRetentionRateChartData(timePeriod, binning);
+    const labels = chartData.labels;
+    const retentionRates = chartData.retentionRates;
+
+    const binningLabel = binning === 'daily' ? 'Daily' : binning === 'weekly' ? 'Weekly' : 'Monthly';
+
+    adminRetentionChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: `${binningLabel} Retention Rate (%)`,
+                    data: retentionRates,
+                    borderColor: 'rgba(156, 39, 176, 1)',
+                    backgroundColor: 'rgba(156, 39, 176, 0.1)',
+                    borderWidth: 3,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: 'rgba(156, 39, 176, 1)',
+                    tension: 0.3,
+                    spanGaps: true,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Retention Rate (%)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            return ` Retention: ${value !== null ? value + '%' : 'No data'}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function showAdminPanel() {
+    if (!checkAdminAuth()) {
+        // Show password modal
+        $('#adminPasswordModal').css('display', 'flex');
+        $('#adminPasswordError').hide();
+        $('#adminPasswordInput').val('');
+        setTimeout(() => $('#adminPasswordInput').el?.focus(), 100);
+    } else {
+        // Already authenticated, show admin panel
+        renderAdminDashboard();
+    }
 }
 
 // --- Actions ---
@@ -825,9 +2165,8 @@ function setupEventListeners() {
         window.history.pushState({}, '', window.location.pathname);
     });
 
-    $('#showAllData').click(() => {
-        state.paymentSort = { col: null, asc: true };
-        renderAllPayments();
+    $('#showAdminPanel').click(() => {
+        showAdminPanel();
     });
 
     $('.att-filter').on('change', () => {
@@ -837,15 +2176,33 @@ function setupEventListeners() {
     // Tab switching
     $('.tab-btn').on('click', function() {
         const tab = this.getAttribute('data-tab');
-        $('.tab-btn').removeClass('active');
-        $(this).addClass('active');
-        $('#tabPaymentSummary').el.classList.toggle('active', tab === 'paymentSummary');
-        $('#tabActivityOverview').el.classList.toggle('active', tab === 'activityOverview');
+        const parent = this.closest('.tab-header');
 
-        // Render activity chart when its tab becomes visible (canvas must be visible)
-        if (tab === 'activityOverview' && state.currentUser) {
-            const userRows = state.attendance.filter(r => r[ATT.NAME] === state.currentUser);
-            renderActivityChart(userRows);
+        // Remove active class from sibling buttons only
+        parent.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        this.classList.add('active');
+
+        // Handle user dashboard tabs
+        if (tab === 'paymentSummary' || tab === 'activityOverview') {
+            $('#tabPaymentSummary').el.classList.toggle('active', tab === 'paymentSummary');
+            $('#tabActivityOverview').el.classList.toggle('active', tab === 'activityOverview');
+
+            // Render activity chart when its tab becomes visible (canvas must be visible)
+            if (tab === 'activityOverview' && state.currentUser) {
+                const userRows = state.attendance.filter(r => r[ATT.NAME] === state.currentUser);
+                renderActivityChart(userRows);
+            }
+        }
+
+        // Handle admin debtors/yearly data tabs
+        if (tab === 'topDebtors' || tab === 'yearlyData') {
+            $('#tabTopDebtors').el.classList.toggle('active', tab === 'topDebtors');
+            $('#tabYearlyData').el.classList.toggle('active', tab === 'yearlyData');
+
+            // Render yearly data table when tab becomes visible
+            if (tab === 'yearlyData') {
+                renderYearlyDataTable();
+            }
         }
     });
 
@@ -853,8 +2210,43 @@ function setupEventListeners() {
 
     $('#paymentStatusFilter').on('change', renderAllPayments);
     $('#neverPaidToggle').on('change', renderAllPayments);
+    $('#oneSessionToggle').on('change', renderAllPayments);
+    $('#coveredYearFilter').on('change', renderAllPayments);
+    $('#lastPaymentYearFilter').on('change', renderAllPayments);
+    $('#lastPaymentMonthFilter').on('change', renderAllPayments);
+
+    // Yearly data filter
+    $('#yearRangeFilter').on('change', renderYearlyDataTable);
 
     $('.close-modal, .close-modal-btn').on('click', () => $('#qrModal').hide());
+
+    // Admin password modal
+    $('.close-admin-modal').on('click', () => {
+        $('#adminPasswordModal').hide();
+        $('#adminPasswordError').hide();
+        $('#adminPasswordInput').val('');
+    });
+
+    $('#adminPasswordSubmit').click(() => {
+        const password = $('#adminPasswordInput').val();
+        if (setAdminAuth(password)) {
+            $('#adminPasswordModal').hide();
+            $('#adminPasswordError').hide();
+            $('#adminPasswordInput').val('');
+            renderAdminDashboard();
+        } else {
+            $('#adminPasswordError').show();
+            $('#adminPasswordInput').val('');
+            setTimeout(() => $('#adminPasswordInput').el?.focus(), 100);
+        }
+    });
+
+    // Allow Enter key to submit password
+    $('#adminPasswordInput').on('keypress', (e) => {
+        if (e.key === 'Enter') {
+            $('#adminPasswordSubmit').el?.click();
+        }
+    });
 
     // Attendance table headers
     $('#attendanceTable th[data-sort]').click(function() {
@@ -880,6 +2272,33 @@ function setupEventListeners() {
         $(this).addClass(sort.asc ? 'sort-asc' : 'sort-desc');
 
         renderAllPayments();
+    });
+
+    // Admin chart controls
+    $('#revenueTimePeriod, #revenueBinning').on('change', () => {
+        if (state.isAdminAuthenticated && $('#adminPanel').css('display') !== 'none') {
+            renderAdminDashboard();
+        }
+    });
+
+    // Admin chart tabs
+    $('.admin-chart-tab').click(function() {
+        const chartType = this.getAttribute('data-chart');
+        adminChartState.activeChart = chartType;
+
+        // Update tab active states
+        $('.admin-chart-tab').removeClass('active');
+        $(this).addClass('active');
+
+        // Show/hide chart containers
+        $('.admin-chart-container').hide();
+        if (chartType === 'revenue') {
+            $('#revenueChartContainer').show();
+        } else if (chartType === 'velocity') {
+            $('#velocityChartContainer').show();
+        } else if (chartType === 'retention') {
+            $('#retentionChartContainer').show();
+        }
     });
 }
 
